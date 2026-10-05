@@ -104,3 +104,29 @@ Beim ersten Start: Familienkonto-E-Mail + Passwort eingeben (einmalig). Danach e
 - **Datensicherung:** unter Verwaltung → „Sicherung herunterladen“ (ab und zu machen).
 
 **Zur Sicherheit:** Die PIN dient zur Auswahl der Person innerhalb der Familie. Sie ist kein Schutz gegen technisch versierte Angreifer. Vor Fremden schützt das Familienkonto-Passwort.
+
+---
+
+## Schritt 7 – Google Kalender anzeigen (optional)
+
+Jede Person kann unter **Meine Einstellungen** einen oder mehrere Google Kalender verknüpfen. Die Termine erscheinen dann in ihrer Farbe in der App. Das ist **nur lesen**: Geändert wird weiter direkt in Google.
+
+### 7a – Einmalig: Helfer-Funktion in Supabase anlegen
+
+Der Browser darf Google-Kalender nicht direkt abrufen. Deshalb holt eine kleine Supabase-Funktion die Termine ab.
+
+1. In Supabase links **Edge Functions** öffnen → **Deploy a new function** → **Via Editor**.
+2. Den Beispielcode im Editor komplett löschen und den Inhalt der Datei `supabase/google-kalender/index.ts` hineinkopieren.
+3. Unten als Namen **`google-kalender`** eintragen (genau so) → **Deploy function**.
+4. Danach in der Funktion auf **Details** bzw. **Settings** gehen. Die Option **Verify JWT** (auch: „Enforce JWT verification“) **ausschalten** und speichern. Die Funktion prüft die Anmeldung selbst.
+
+### 7b – Pro Person: Google Kalender verknüpfen
+
+1. **Am Computer** calendar.google.com öffnen (in der Handy-App gibt es diese Einstellung nicht).
+2. Oben rechts ⚙️ → **Einstellungen**.
+3. Links unter **Einstellungen für meine Kalender** den gewünschten Kalender anklicken.
+4. Nach unten zu **Kalender integrieren** scrollen → **Geheime Adresse im iCal-Format** kopieren.
+5. In der Familien-App: oben rechts auf den eigenen Namen → **Meine Einstellungen** → Adresse einfügen → **Verknüpfen**.
+
+Die App aktualisiert die Google-Termine automatisch alle 15 Minuten und beim Öffnen.
+Die geheime Adresse bitte nicht weitergeben: Wer sie kennt, kann den Kalender lesen.

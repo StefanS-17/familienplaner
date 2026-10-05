@@ -42,7 +42,12 @@ Farben, Rollen und PINs lassen sich in der App unter **Verwaltung** ändern.
 - Kinder dürfen **eigene Aufgaben selbst abhaken**, ohne Bestätigung.
 - Einkaufsliste abhaken: nur Eltern (Kinder setzen Einträge als Vorschlag drauf).
 
+## Version 2 (06.10.2026)
+- **Meine Einstellungen** pro Person (gilt auf allen Geräten): eigene Farbe, Hintergrundfarbe (Auswahl oder eigene), Hell/Dunkel/Automatisch
+- **Google Kalender anzeigen** (nur lesen): jede Person verknüpft beliebig viele Google Kalender über die geheime iCal-Adresse; Abruf über Supabase Edge Function `google-kalender`, Aktualisierung alle 15 Min.
+
 ## Stand
 - [x] Version 1 gebaut (`index.html`), Testmodus funktioniert
 - [x] Supabase eingerichtet (Projekt drwuqnwepaaqlafsktfa, Frankfurt), Familienkonto angelegt, Registrierung gesperrt, Live-Sync getestet
-- [ ] Online stellen (GitHub Pages) und auf Geräten installieren
+- [x] Online unter https://stefans-17.github.io/familienplaner/
+- [ ] Edge Function `google-kalender` in Supabase anlegen (EINRICHTUNG.md, Schritt 7)
