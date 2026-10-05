@@ -44,7 +44,7 @@ Farben, Rollen und PINs lassen sich in der App unter **Verwaltung** ändern.
 
 ## Version 2 (06.10.2026)
 - **Meine Einstellungen** pro Person (gilt auf allen Geräten): eigene Farbe, Hintergrundfarbe (Auswahl oder eigene), Hell/Dunkel/Automatisch
-- **Google Kalender anzeigen** (nur lesen): jede Person verknüpft beliebig viele Google Kalender über die geheime iCal-Adresse; Abruf über Supabase Edge Function `google-kalender`, Aktualisierung alle 15 Min.
+- **Google Familienkalender anzeigen** (nur lesen): nur der **Admin** verknüpft Kalender unter Verwaltung (geheime iCal-Adresse). Name im Termintitel → Farbe dieser Person, sonst „Ganze Familie“ (abschaltbar, Standard-Zuordnung wählbar). Abruf über Supabase Edge Function `google-kalender`, Aktualisierung alle 15 Min.
 
 ## Stand
 - [x] Version 1 gebaut (`index.html`), Testmodus funktioniert

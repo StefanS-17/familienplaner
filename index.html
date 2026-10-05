@@ -578,18 +578,28 @@ function rruleDates(ev, from, to){
   } else if (ev.start.date >= from && ev.start.date <= to) out.push(ev.start.date);
   return out;
 }
+const nameRe = {};
+function gPersons(g, title){
+  // Steht ein Name im Termintitel, gehört der Termin dieser Person, sonst der eingestellten Zuordnung (leer = ganze Familie)
+  if (g.matchNames !== false){
+    const hit = members().filter(m => (nameRe[m.name] ||= new RegExp(`(?<!\\p{L})${m.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\p{L})`, 'iu')).test(title)).map(m => m.id);
+    if (hit.length) return hit;
+  }
+  return (g.persons || []).filter(id => mem(id));
+}
 function gOccurrences(from, to, opts = {}){
   const out = [];
   for (const g of all('gcal')){
-    if (!mem(g.member) || (!opts.all && !S.filter.has(g.member))) continue;
     (G.data[g.id]?.events || []).forEach((ev, idx) => {
+      const persons = gPersons(g, ev.title);
+      if (!opts.all && !visible(persons)) return;
       const span = ev.start.allDay && ev.end?.date ? Math.max(0, Math.round((parse(ev.end.date) - parse(ev.start.date)) / 864e5) - 1) : 0;
       const from2 = span ? ymd(addDays(parse(from), -span)) : from;
       const dates = ev.rrule ? rruleDates(ev, from2, to) : (ev.start.date >= from2 && ev.start.date <= to ? [ev.start.date] : []);
       for (const d of dates){
         const id = `g-${g.id}-${idx}-${d}`;
         const e = G.index[id] || (G.index[id] = { id, type:'gevent', category:'google', status:'ok', title:ev.title, location:ev.location, note:ev.note,
-          persons:[g.member], allDay:!!ev.start.allDay, start:ev.start.time || '', end:ev.end?.time || '', source:g.label, date:d });
+          persons, allDay:!!ev.start.allDay, start:ev.start.time || '', end:ev.end?.time || '', source:g.label, date:d });
         for (let k = 0; k <= span; k++){ const ds = ymd(addDays(parse(d), k)); if (ds >= from && ds <= to) out.push({ e, date:ds }); }
       }
     });
@@ -621,7 +631,6 @@ async function syncGoogle(force){
   try { localStorage.setItem(LS_G, JSON.stringify(G.data)); } catch {}
   G.busy = false;
   render();
-  if (document.getElementById('settings') && !document.getElementById('g-url')?.value) A.settings();
 }
 function startGoogle(){
   if (S.mode !== 'cloud' || G.timer) return;
@@ -868,6 +877,14 @@ function vVerwaltung(){
   const ms = members();
   let h = `<div class="card"><h3><span class="grow">👪 Personen</span><button class="btn sm" onclick="A.editMember()">${ic('plus','sm')} Person</button></h3>${ms.map(m => `<div class="li">${avatar(m)}<div class="lt"><div class="tt"><b>${esc(m.name)}</b></div><div class="sub"><span class="tag">${m.role==='parent'?'Elternteil':'Kind'}</span>${m.admin?'<span class="tag">⚙️ Admin</span>':''}${m.pinHash?'':'<span class="tag red">keine PIN</span>'}</div></div><button class="btn sec sm" onclick="A.editMember('${m.id}')">${ic('edit','sm')} Bearbeiten</button></div>`).join('')}
     <p class="muted small" style="margin-bottom:0"><b>Rechte:</b> Eltern dürfen alles anlegen, bearbeiten und löschen. Kinder sehen alles und dürfen Einträge anlegen – diese gelten als Vorschlag, bis ein Elternteil sie bestätigt. Eigene Aufgaben dürfen Kinder selbst abhaken.</p></div>`;
+  const gs = all('gcal'), ex = (members().find(m => m.role === 'child') || members()[0])?.name || 'Name';
+  const who = g => { const ps = (g.persons || []).map(mem).filter(Boolean); return ps.length ? ps.map(p => esc(p.name)).join(', ') : 'Ganze Familie'; };
+  h += `<div class="card"><h3><span class="grow">📆 Google Kalender</span>${S.mode === 'cloud' ? `<button class="btn sm" onclick="A.editGcal()">${ic('plus','sm')} Kalender</button>` : ''}</h3>
+    ${S.mode !== 'cloud' ? '<p class="muted small">Nur mit Cloud-Verbindung verfügbar.</p>' : gs.length ? gs.map(g => { const c = G.data[g.id];
+      return `<div class="li"><span style="font-size:22px">📆</span><div class="lt"><div class="tt"><b>${esc(g.label)}</b></div><div class="sub">${!c ? 'wird geladen…' : c.error ? `<span class="tag red">${esc(c.error)}</span>` : `<span>${c.events.length} Termine · aktualisiert ${relTime(new Date(c.fetchedAt).toISOString())}</span>`}<span class="tag">ohne Namen → ${who(g)}</span>${g.matchNames !== false ? '<span class="tag">Namen erkennen</span>' : ''}</div></div><button class="btn sec sm" onclick="A.editGcal('${g.id}')">${ic('edit','sm')} Bearbeiten</button></div>`; }).join('')
+      + `<button class="btn sec sm" style="margin-top:10px" onclick="A.syncG()">Jetzt aktualisieren</button>`
+      : '<div class="empty">Noch kein Google Kalender verknüpft.</div>'}
+    <p class="muted small" style="margin-bottom:0">Die Termine erscheinen in der App zum Ansehen und werden alle 15 Minuten aktualisiert – geändert wird in Google. Steht ein Name im Titel (z. B. „${esc(ex)} Zahnarzt“), bekommt der Termin die Farbe dieser Person.</p></div>`;
   const cfg = cloudCfg();
   h += `<div class="card"><h3>☁️ Speicherort</h3>${S.mode === 'cloud'
     ? `<p>Verbunden mit der Familien-Cloud. Alle Geräte sehen dieselben Daten.</p><div class="row wrap"><button class="btn sec sm" onclick="A.cloudLogout()">Familienkonto auf diesem Gerät abmelden</button>${CLOUD.url?'':`<button class="btn sec sm" onclick="A.cloudDisconnect()">Cloud-Verbindung entfernen</button>`}</div>`
@@ -1120,23 +1137,12 @@ const A = {
   /* Meine Einstellungen */
   settings(){
     const m = S.me, p = m.prefs || {}, old = document.querySelector('#settings')?.closest('.modal')?.scrollTop || 0;
-    const gs = all('gcal').filter(g => g.member === m.id);
     const custom = p.bg && !COLORS.includes(p.bg);
-    const gRow = g => { const c = G.data[g.id];
-      return `<div class="li"><span style="font-size:22px">📆</span><div class="lt"><div class="tt"><b>${esc(g.label)}</b></div><div class="sub">${!c ? 'wird geladen…' : c.error ? `<span class="tag red">${esc(c.error)}</span>` : `${c.events.length} Termine · aktualisiert ${relTime(new Date(c.fetchedAt).toISOString())}`}</div></div><button class="icon-btn" onclick="A.delGcal('${g.id}')" aria-label="Verknüpfung entfernen">${ic('trash','sm')}</button></div>`; };
     openModal(`<div id="settings"><div class="row" style="margin-bottom:6px">${avatar(m)}<h2 style="margin:0">Meine Einstellungen</h2></div>
       <p class="muted small" style="margin-top:4px">Gilt nur für dich – auf jedem Gerät, auf dem du dich anmeldest.</p>
       <div class="sec-t">Meine Farbe</div><div class="colors">${COLORS.map(c => `<button class="${c === m.color ? 'on' : ''}" style="--c:${c}" onclick="A.setPref('color','${c}')" aria-label="Farbe wählen"></button>`).join('')}</div>
       <div class="sec-t" style="margin-top:18px">Hintergrund</div><div class="colors"><button class="none ${!p.bg ? 'on' : ''}" onclick="A.setPref('bg','')" title="Standard" aria-label="Standard-Hintergrund">–</button>${COLORS.map(c => `<button class="${c === p.bg ? 'on' : ''}" style="--c:${c}" onclick="A.setPref('bg','${c}')" aria-label="Hintergrundfarbe wählen"></button>`).join('')}<label class="custom ${custom ? 'on' : ''}" title="Eigene Farbe"><input type="color" value="${custom ? p.bg : '#2563eb'}" onchange="A.setPref('bg',this.value)" aria-label="Eigene Hintergrundfarbe"></label></div>
       <div class="sec-t" style="margin-top:18px">Darstellung</div><div class="seg">${[['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(([k,l]) => `<button class="${(p.theme || 'auto') === k ? 'on' : ''}" onclick="A.setPref('theme','${k}')">${l}</button>`).join('')}</div>
-      <div class="sec-t" style="margin-top:18px">Mein Google Kalender</div>
-      ${S.mode !== 'cloud' ? '<p class="muted small">Nur mit Cloud-Verbindung verfügbar.</p>' : `${gs.map(gRow).join('')}
-        <form onsubmit="A.addGcal(event)" style="margin-top:10px">
-          <div class="field"><label for="g-label">Bezeichnung</label><input class="input" id="g-label" placeholder="z. B. Mein Kalender"></div>
-          <div class="field"><label for="g-url">Geheime Adresse im iCal-Format</label><input class="input" id="g-url" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" autocomplete="off">
-          <div class="muted small" style="margin-top:4px">Am Computer in Google Kalender: ⚙️ Einstellungen → links unter „Meine Kalender“ den Kalender anklicken → „Kalender integrieren“ → <b>Geheime Adresse im iCal-Format</b> kopieren.</div></div>
-          <div class="row wrap"><button class="btn sm">Verknüpfen</button>${gs.length ? `<button type="button" class="btn sec sm" onclick="A.syncG()">Jetzt aktualisieren</button>` : ''}</div>
-        </form>`}
       <div class="actions"><button class="btn" onclick="A.close()">Fertig</button></div></div>`);
     const md = document.querySelector('#modal .modal'); if (md) md.scrollTop = old;
   },
@@ -1145,14 +1151,24 @@ const A = {
     if (k === 'color') m.color = v; else m.prefs = { ...(m.prefs || {}), [k]: v };
     Store.save(m); A.settings();
   },
-  addGcal(e){
-    e.preventDefault();
-    const url = document.getElementById('g-url').value.trim(), label = document.getElementById('g-label').value.trim() || 'Google Kalender';
-    if (!/^https:\/\/calendar\.google\.com\/calendar\/ical\//.test(url)){ toast('Bitte die „Geheime Adresse im iCal-Format“ aus Google Kalender einfügen', true); return; }
-    Store.save({ id:'gcal-' + uid(), type:'gcal', member:S.me.id, label, url, status:'ok', createdBy:S.me.id, createdAt:new Date().toISOString() }).then(() => syncGoogle(true));
-    A.settings(); toast('Kalender verknüpft – Termine werden geladen');
+  editGcal(id){
+    if (!isAdmin()) return;
+    const g = id ? find(id) : null;
+    openForm({ title: g ? 'Google Kalender bearbeiten' : 'Google Kalender verknüpfen', fields:[
+      { k:'label', label:'Bezeichnung', required:true, ph:'z. B. Familienkalender' },
+      { k:'url', label:'Geheime Adresse im iCal-Format', required:true, ph:'https://calendar.google.com/calendar/ical/…/basic.ics',
+        hint:'Am Computer in Google Kalender: ⚙️ Einstellungen → links den Kalender anklicken → „Kalender integrieren“ → <b>Geheime Adresse im iCal-Format</b> kopieren.' },
+      { k:'matchNames', label:'Personen anhand des Namens im Termintitel erkennen', type:'checkbox' },
+      { k:'persons', label:'Termine ohne erkannten Namen gehören zu', type:'persons', hint:'Keine Auswahl = Ganze Familie' }],
+      values: g || { label:'Familienkalender', matchNames:true, persons:[] },
+      onSave: v => {
+        if (!/^https:\/\/calendar\.google\.com\/calendar\/ical\//.test(v.url)){ toast('Bitte die „Geheime Adresse im iCal-Format“ aus Google Kalender einfügen', true); return; }
+        Store.save(g ? { ...g, ...v } : { id:'gcal-' + uid(), type:'gcal', ...v, status:'ok', createdBy:S.me.id, createdAt:new Date().toISOString() }).then(() => syncGoogle(true));
+        toast(g ? 'Gespeichert' : 'Kalender verknüpft – Termine werden geladen');
+      },
+      extra: g ? `<button type="button" class="btn danger" style="width:100%;margin-top:10px" onclick="A.delGcal('${g.id}')">${ic('trash','sm')} Verknüpfung entfernen</button>` : '' });
   },
-  delGcal(id){ Store.remove(id).then(() => syncGoogle()); A.settings(); toast('Verknüpfung entfernt'); },
+  delGcal(id){ if (!isAdmin()) return; confirmBox('Verknüpfung mit diesem Google Kalender entfernen? Die Termine verschwinden aus der App, in Google bleiben sie erhalten.', () => Store.remove(id).then(() => syncGoogle()), 'Entfernen'); },
   syncG(){ syncGoogle(true); toast('Wird aktualisiert…'); },
 
   /* Verwaltung */

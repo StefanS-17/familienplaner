@@ -107,9 +107,11 @@ Beim ersten Start: Familienkonto-E-Mail + Passwort eingeben (einmalig). Danach e
 
 ---
 
-## Schritt 7 – Google Kalender anzeigen (optional)
+## Schritt 7 – Google Familienkalender anzeigen (optional)
 
-Jede Person kann unter **Meine Einstellungen** einen oder mehrere Google Kalender verknüpfen. Die Termine erscheinen dann in ihrer Farbe in der App. Das ist **nur lesen**: Geändert wird weiter direkt in Google.
+Der **Admin** kann unter **Verwaltung → Google Kalender** den Google-Familienkalender (oder weitere Kalender) verknüpfen. Die Termine erscheinen dann für alle in der App, **nur zum Ansehen** – geändert wird weiter direkt in Google. Andere Familienmitglieder können die Verknüpfung nicht ändern.
+
+**Farben:** Steht ein Name im Termintitel (z. B. „Zahnarzt Max“), bekommt der Termin automatisch die Farbe dieser Person. Termine ohne Namen erscheinen als **Ganze Familie** (oder bei den Personen, die in der Verknüpfung ausgewählt sind). Die Namenserkennung lässt sich pro Kalender ausschalten.
 
 ### 7a – Einmalig: Helfer-Funktion in Supabase anlegen
 
@@ -120,13 +122,14 @@ Der Browser darf Google-Kalender nicht direkt abrufen. Deshalb holt eine kleine 
 3. Unten als Namen **`google-kalender`** eintragen (genau so) → **Deploy function**.
 4. Danach in der Funktion auf **Details** bzw. **Settings** gehen. Die Option **Verify JWT** (auch: „Enforce JWT verification“) **ausschalten** und speichern. Die Funktion prüft die Anmeldung selbst.
 
-### 7b – Pro Person: Google Kalender verknüpfen
+### 7b – Familienkalender verknüpfen (Admin)
 
 1. **Am Computer** calendar.google.com öffnen (in der Handy-App gibt es diese Einstellung nicht).
 2. Oben rechts ⚙️ → **Einstellungen**.
-3. Links unter **Einstellungen für meine Kalender** den gewünschten Kalender anklicken.
+3. Links unter **Einstellungen für meine Kalender** den Familienkalender anklicken.
 4. Nach unten zu **Kalender integrieren** scrollen → **Geheime Adresse im iCal-Format** kopieren.
-5. In der Familien-App: oben rechts auf den eigenen Namen → **Meine Einstellungen** → Adresse einfügen → **Verknüpfen**.
+   (Fehlt diese Option, gehört der Kalender einem anderen Konto – dann muss der Besitzer die Adresse kopieren.)
+5. In der Familien-App als Admin: **Verwaltung → Google Kalender → + Kalender** → Adresse einfügen → **Speichern**.
 
 Die App aktualisiert die Google-Termine automatisch alle 15 Minuten und beim Öffnen.
 Die geheime Adresse bitte nicht weitergeben: Wer sie kennt, kann den Kalender lesen.
