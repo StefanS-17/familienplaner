@@ -282,6 +282,15 @@ textarea.input{min-height:90px;resize:vertical}
 .seg::-webkit-scrollbar{display:none}
 .seg button{white-space:nowrap}
 @media (max-width:480px){.seg button{padding:7px 10px;font-size:13px}}
+/* Migräne & Luftdruck */
+.pwarn{display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border-radius:10px;margin-bottom:8px;cursor:pointer;font-size:14px;line-height:1.35}
+.pwarn .pi{font-size:18px;line-height:1.2}
+.pwarn.on{background:color-mix(in srgb,#ef4444 12%,var(--card));border:1px solid color-mix(in srgb,#ef4444 35%,var(--line))}
+.pwarn.soon{background:color-mix(in srgb,#f59e0b 14%,var(--card));border:1px solid color-mix(in srgb,#f59e0b 40%,var(--line))}
+.pc-wrap{position:relative;margin-top:6px}
+.pc-wrap svg{width:100%;height:auto;display:block;touch-action:pan-y}
+.pc-tip{position:absolute;top:0;pointer-events:none;background:var(--text);color:var(--bg);font-size:12px;padding:4px 8px;border-radius:8px;white-space:nowrap;transform:translateX(-50%);display:none}
+.p-sum{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px;margin:4px 0}
 /* Wetter */
 .wx{display:block;width:100%;text-align:left;cursor:pointer;font:inherit;color:inherit;background:linear-gradient(135deg,color-mix(in srgb,#38bdf8 24%,var(--card)),var(--card) 75%)}
 .wx.night{background:linear-gradient(135deg,color-mix(in srgb,#6366f1 26%,var(--card)),var(--card) 75%)}
@@ -828,12 +837,12 @@ const wxData = () => { const l = wxLoc(); return l && W.data?.key === l.lat + ',
 async function loadWeather(force){
   const loc = wxLoc(); if (!loc || W.loading) return;
   const key = loc.lat + ',' + loc.lon;
-  if (!force && W.data?.key === key && Date.now() - W.data.at < 30 * 60e3) return;
+  if (!force && W.data?.key === key && W.data.hourly?.pressure_msl && Date.now() - W.data.at < 30 * 60e3) return;
   W.loading = true;
   try {
-    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&timezone=auto&forecast_days=7`
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&timezone=auto&forecast_days=7&past_hours=24&forecast_hours=168`
       + '&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m'
-      + '&hourly=temperature_2m,weather_code,precipitation_probability,precipitation,is_day'
+      + '&hourly=temperature_2m,weather_code,precipitation_probability,precipitation,is_day,pressure_msl'
       + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset,uv_index_max,wind_speed_10m_max');
     if (!r.ok) throw new Error('Wetterdienst nicht erreichbar (' + r.status + ')');
     W.data = { key, at:Date.now(), ...(await r.json()) }; W.error = null;
@@ -850,6 +859,62 @@ function startWeather(){
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadWeather(); });
   loadWeather();
 }
+/* Migräne: Warnung bei deutlicher Luftdruck-Änderung (Admin legt Personen und Schwelle fest) */
+const migCfg = () => find('config-migraene') || { members:[], threshold:5, direction:'both' };
+const hasMig = id => (migCfg().members || []).includes(id);
+const hpa = v => (Math.round(Math.abs(v) * 10) / 10).toLocaleString('de-DE');
+const pWord = v => v < 0 ? 'fällt' : 'steigt';
+function whenLabel(t){ const n = daysUntil(t.slice(0,10)); return `${n === 0 ? 'heute' : n === 1 ? 'morgen' : n === -1 ? 'gestern' : WD[wdIdx(parse(t.slice(0,10)))]} ${t.slice(11,13)} Uhr`; }
+function pressureInfo(){
+  const d = wxData(), p = d?.hourly?.pressure_msl; if (!p) return null;
+  const hr = d.hourly, now = hr.time.findIndex(t => t.slice(0,13) === d.current.time.slice(0,13)); if (now < 0) return null;
+  const cfg = migCfg(), thr = +cfg.threshold || 5, fallOnly = cfg.direction === 'fall';
+  const d24 = i => i >= 24 && i < p.length && p[i] != null && p[i-24] != null ? p[i] - p[i-24] : null;   // Änderung in den 24 Std. bis Stunde i
+  const hit = v => v != null && (fallOnly ? v <= -thr : Math.abs(v) >= thr);
+  let active = null, expected = null;
+  // läuft: ein 24-Std.-Fenster, das jetzt im Gange ist (endet in den nächsten 12 Std.)
+  for (let i = now; i <= now + 12; i++){ const v = d24(i); if (hit(v) && (!active || Math.abs(v) > Math.abs(active.delta))) active = { delta:v, from:i-24, to:i }; }
+  // erwartet: ein Fenster, das erst in der Zukunft beginnt (innerhalb der nächsten 48 Std.) – frühestes, davon das stärkste
+  for (let i = now + 25; i <= now + 72; i++){
+    const v = d24(i); if (!hit(v)) continue;
+    expected = { delta:v, from:i-24, to:i };
+    for (let j = i + 1; j <= i + 12; j++){ const w = d24(j); if (hit(w) && Math.sign(w) === Math.sign(v) && Math.abs(w) > Math.abs(expected.delta)) expected = { delta:w, from:j-24, to:j }; }
+    break;
+  }
+  if (active && expected && Math.sign(active.delta) === Math.sign(expected.delta) && expected.from <= active.to) expected = null;
+  return { now, thr, fallOnly, active, expected, current:p[now], change:d24(now), hr, p };
+}
+function pressureBanner(pi){
+  if (!pi) return '';
+  let h = '';
+  if (pi.active) h += `<div class="pwarn on" onclick="A.weather(0,true)"><span class="pi">🌀</span><div><b>Luftdruck-Änderung läuft</b><div class="small">${pWord(pi.active.delta)} um ${hpa(pi.active.delta)} hPa · ${whenLabel(pi.hr.time[pi.active.from])} bis ${whenLabel(pi.hr.time[pi.active.to])}</div></div></div>`;
+  if (pi.expected) h += `<div class="pwarn soon" onclick="A.weather(0,true)"><span class="pi">⚠️</span><div><b>Luftdruck-Änderung erwartet</b><div class="small">${pWord(pi.expected.delta)} ab ${whenLabel(pi.hr.time[pi.expected.from])} um ${hpa(pi.expected.delta)} hPa (in 24 Std.)</div></div></div>`;
+  return h;
+}
+function pressureChart(pi){
+  const { hr, p, now } = pi, a = Math.max(0, now - 24), b = Math.min(p.length - 1, now + 48);
+  const idx = []; for (let i = a; i <= b; i++) if (p[i] != null) idx.push(i);
+  if (idx.length < 2) return '';
+  const VW = innerWidth < 600 ? 360 : 640, VH = innerWidth < 600 ? 170 : 180, L = 40, R = 10, T = 22, B = 26;   // schmale Bildschirme: echte Schriftgröße
+  let lo = Math.floor(Math.min(...idx.map(i => p[i])) - 1), hi = Math.ceil(Math.max(...idx.map(i => p[i])) + 1);
+  const x = i => L + (i - a) / (b - a) * (VW - L - R), y = v => T + (hi - v) / (hi - lo) * (VH - T - B);
+  W.pc = { a, b, L, R, VW, now, hr, p, x, y };
+  const ticks = [lo, Math.round((lo + hi) / 2), hi];
+  let g = ticks.map(v => `<line x1="${L}" x2="${VW - R}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line);stroke-width:1"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" style="fill:var(--muted);font-size:11px">${v}</text>`).join('');
+  for (let i = a; i <= b; i++) if (hr.time[i].endsWith('T00:00') && i > a && Math.abs(x(i) - x(now)) > 40 && x(i) < VW - R - 20) g += `<line x1="${x(i)}" x2="${x(i)}" y1="${T}" y2="${VH - B}" style="stroke:var(--line);stroke-width:1"/><text x="${x(i) + 4}" y="${VH - 8}" style="fill:var(--muted);font-size:11px">${WD[wdIdx(parse(hr.time[i].slice(0,10)))]}</text>`;
+  const band = (w, col, label) => { if (!w) return ''; const x1 = x(Math.max(a, w.from)), x2 = x(Math.min(b, w.to));
+    return `<rect x="${x1}" y="${T}" width="${Math.max(2, x2 - x1)}" height="${VH - T - B}" style="fill:color-mix(in srgb,${col} 16%,transparent)"/><text x="${x1 + 4}" y="${T - 6}" style="fill:var(--text);font-size:11px;font-weight:600">${label}</text>`; };
+  g = band(pi.active, '#ef4444', '🌀 läuft') + band(pi.expected, '#f59e0b', '⚠️ erwartet') + g;
+  const path = idx.map((i, n) => `${n ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[i]).toFixed(1)}`).join('');
+  g += `<line x1="${x(now)}" x2="${x(now)}" y1="${T}" y2="${VH - B}" style="stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 4"/><text x="${x(now) + 4}" y="${VH - 8}" style="fill:var(--text);font-size:11px;font-weight:600">Jetzt</text>`;
+  g += `<path d="${path}" style="fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round"/>`;
+  g += `<circle cx="${x(now)}" cy="${y(p[now])}" r="4" style="fill:var(--accent);stroke:var(--card);stroke-width:2"/>`;
+  g += `<g id="pc-h" style="display:none"><line id="pc-hl" y1="${T}" y2="${VH - B}" style="stroke:var(--text);stroke-width:1;opacity:.5"/><circle id="pc-hd" r="5" style="fill:var(--accent);stroke:var(--card);stroke-width:2"/></g>`;
+  g += `<rect x="${L}" y="0" width="${VW - L - R}" height="${VH}" style="fill:transparent" onpointermove="A.pcHover(event)" onpointerdown="A.pcHover(event)" onpointerleave="A.pcHover(null)"/>`;
+  const lbl = `Luftdruck in hPa von ${whenLabel(hr.time[a])} bis ${whenLabel(hr.time[b])}, aktuell ${hpa(p[now])} hPa.`;
+  return `<div class="pc-wrap"><svg viewBox="0 0 ${VW} ${VH}" role="img" aria-label="${lbl}">${g}</svg><div class="pc-tip" id="pc-tip"></div></div>`;
+}
+
 function weatherWidget(ds){
   const loc = wxLoc();
   if (!loc) return `<div class="card wx" style="cursor:default">🌤️ <b>Wetter</b> <span class="muted">– ${isAdmin() ? `<a href="#" onclick="A.wxPlace();return false">Wohnort festlegen</a>, dann erscheint hier die Vorhersage.` : 'Der Admin kann den Wohnort unter Verwaltung festlegen.'}</span></div>`;
@@ -944,6 +1009,7 @@ function vHeute(){
   if (hol) h += `<div class="banner warn">🏖️ <span><b>${esc(hol.name)}</b> bis ${fmtShort(hol.to)} – kein Stundenplan</span></div>`;
   h += weatherWidget(ds);
   const famEv = occ.filter(o => !o.e.persons || !o.e.persons.length);
+  const pInfo = (migCfg().members || []).length ? pressureInfo() : null;
   h += `<div class="grid pgrid">`;
   for (const m of members().filter(m => S.filter.has(m.id))){
     const ev = occ.filter(o => o.e.persons && o.e.persons.includes(m.id) && o.e.category !== 'pruefung');
@@ -951,6 +1017,7 @@ function vHeute(){
     const ex = upcomingExams(m.id, 14);
     const tt = m.role === 'child' ? timetableToday(m.id, ds) : [];
     h += `<div class="card pcard" style="--c:${m.color}"><div class="ph">${avatar(m)}${esc(m.name)}${m.id===S.me.id?' <span class="muted small" style="font-weight:400">(du)</span>':''}${starChip(m.id)}</div><div class="pb">
+      ${hasMig(m.id) ? pressureBanner(pInfo) : ''}
       ${ex.length ? `<div class="sec-t">📝 Prüfungen</div>${ex.map(examRow).join('')}` : ''}
       <div class="sec-t">Termine</div>${ev.length ? ev.map(o => evRow(o)).join('') : '<div class="empty">Keine Termine</div>'}
       ${tt.length ? `<div class="sec-t">Stundenplan</div>${tt.map(l => `<div class="row small" style="padding:2px 0"><span class="muted" style="width:22px">${l.r}.</span><b>${esc(l.fach)}</b>${l.raum?`<span class="muted">${esc(l.raum)}</span>`:''}${l.time?`<span class="spacer"></span><span class="muted">${esc(l.time)}</span>`:''}</div>`).join('')}` : ''}
@@ -1242,6 +1309,10 @@ function vVerwaltung(){
     <p class="muted small" style="margin-bottom:0"><b>Rechte:</b> Eltern dürfen alles anlegen, bearbeiten und löschen. Kinder sehen alles und dürfen Einträge anlegen – diese gelten als Vorschlag, bis ein Elternteil sie bestätigt. Eigene Aufgaben dürfen Kinder selbst abhaken.</p></div>`;
   const gs = all('gcal'), ex = (members().find(m => m.role === 'child') || members()[0])?.name || 'Name';
   const who = g => { const ps = (g.persons || []).map(mem).filter(Boolean); return ps.length ? ps.map(p => esc(p.name)).join(', ') : 'Ganze Familie'; };
+  const mc = migCfg(), mNames = (mc.members || []).map(id => mem(id)?.name).filter(Boolean);
+  h += `<div class="card"><h3><span class="grow">🤕 Migräne & Luftdruck</span><button class="btn sec sm" onclick="A.editMig()">${ic('edit','sm')} Einstellen</button></h3>
+    <p style="margin:0">${mNames.length ? `Warnungen für: <b>${mNames.map(esc).join(', ')}</b>` : 'Für niemanden aktiviert.'}</p>
+    <p class="muted small" style="margin-bottom:0">Warnung bei einer Luftdruck-Änderung ab ${mc.threshold || 5} hPa innerhalb von 24 Std. (${mc.direction === 'fall' ? 'nur fallend' : 'fallend und steigend'}) – als Vorwarnung, wenn sie erwartet wird, und solange sie läuft. Erscheint in der Personenkarte und im Wetter-Pop-up.</p></div>`;
   h += `<div class="card"><h3><span class="grow">⭐ Sterne-Themen</span><button class="btn sm" onclick="A.editTheme()">${ic('plus','sm')} Thema</button></h3>${starCfg().themes.map(x => `<div class="li"><span style="font-size:22px">${x.icon}</span><div class="lt"><div class="tt"><b>${esc(x.name)}</b></div><div class="sub">Standard: ⭐ ${x.stars} pro Erledigung</div></div><button class="btn sec sm" onclick="A.editTheme('${x.id}')">${ic('edit','sm')} Bearbeiten</button></div>`).join('')}
     <p class="muted small" style="margin-bottom:0">Neue Aufgaben übernehmen den Wert ihres Themas. Pro Aufgabe lässt er sich ändern.</p></div>`;
   const wl = wxLoc();
@@ -1684,7 +1755,7 @@ const A = {
   },
 
   /* Wetter */
-  weather(i = 0){
+  weather(i = 0, focusPressure){
     const loc = wxLoc(), d = wxData(); if (!loc || !d) return;
     W.sel = i;
     const dl = d.daily, hr = d.hourly, ds = dl.time[i], nowH = d.current.time.slice(0,13);
@@ -1699,9 +1770,42 @@ const A = {
       <div class="wx-stats">${stat('Höchst / Tiefst', `${deg(dl.temperature_2m_max[i])} / ${deg(dl.temperature_2m_min[i])}`)}${stat('Regenrisiko', (dl.precipitation_probability_max[i] ?? 0) + ' %')}${stat('Regenmenge', String(dl.precipitation_sum[i] ?? 0).replace('.', ',') + ' mm')}${stat('Wind bis', Math.round(dl.wind_speed_10m_max[i]) + ' km/h')}${stat('Sonne', `🌅 ${dl.sunrise[i].slice(11)} · 🌇 ${dl.sunset[i].slice(11)}`)}${stat('UV-Index', Math.round(dl.uv_index_max[i] ?? 0))}</div>
       <div class="sec-t">${i === 0 ? 'Die nächsten Stunden' : 'Stündlich'}</div>
       <div class="wx-strip">${hours.map((k, n) => `<div class="wx-h ${i === 0 && n === 0 ? 'now' : ''}"><div class="muted small">${i === 0 && n === 0 ? 'Jetzt' : hr.time[k].slice(11,16)}</div><div class="e">${wxIcon(hr.weather_code[k], hr.is_day[k])}</div><b>${deg(hr.temperature_2m[k])}</b><div class="rain">💧${hr.precipitation_probability[k] ?? 0}%</div><div class="rainbar"><i style="width:${hr.precipitation_probability[k] ?? 0}%"></i></div></div>`).join('')}</div>
+      ${(() => { const pi = (migCfg().members || []).length ? pressureInfo() : null; if (!pi) return '';
+        const mc = migCfg();
+        return `<div class="sec-t" id="wx-druck" style="margin-top:16px">🌀 Luftdruck</div>
+          <div class="p-sum"><span>Jetzt <b>${hpa(pi.current)} hPa</b></span>${pi.change != null ? `<span>${pi.change < 0 ? '↘' : '↗'} ${pWord(pi.change)} um ${hpa(pi.change)} hPa seit gestern</span>` : ''}</div>
+          ${pressureBanner(pi).replaceAll('onclick="A.weather(0,true)"', '') || `<div class="small muted">Keine deutliche Änderung in Sicht (Warnschwelle ${mc.threshold} hPa in 24 Std.${mc.direction === 'fall' ? ', nur fallend' : ''}).</div>`}
+          ${pressureChart(pi)}`; })()}
       <div class="muted small" style="margin-top:6px">Wetterdaten: Open-Meteo.com</div>
       <div class="actions"><button class="btn" onclick="A.close()">Schließen</button></div></div>`);
+    if (focusPressure) setTimeout(() => document.getElementById('wx-druck')?.scrollIntoView({ block:'start', behavior:'smooth' }), 50);
     const st = document.querySelector('#wx-pop .wx-strip'); if (st && i > 0 && st.children[6]) st.scrollLeft = st.children[6].offsetLeft - st.offsetLeft;
+  },
+  pcHover(e){
+    const c = W.pc, g = document.getElementById('pc-h'), tip = document.getElementById('pc-tip'); if (!c || !g || !tip) return;
+    if (!e){ g.style.display = 'none'; tip.style.display = 'none'; return; }
+    const svg = e.currentTarget.ownerSVGElement, r = svg.getBoundingClientRect();
+    const vx = (e.clientX - r.left) / r.width * c.VW;
+    const i = Math.max(c.a, Math.min(c.b, Math.round(c.a + (vx - c.L) / (c.VW - c.L - c.R) * (c.b - c.a))));
+    if (c.p[i] == null) return;
+    const px = c.x(i), py = c.y(c.p[i]);
+    g.style.display = ''; document.getElementById('pc-hl').setAttribute('x1', px); document.getElementById('pc-hl').setAttribute('x2', px);
+    document.getElementById('pc-hd').setAttribute('cx', px); document.getElementById('pc-hd').setAttribute('cy', py);
+    tip.textContent = `${whenLabel(c.hr.time[i])} · ${hpa(c.p[i])} hPa`; tip.style.display = 'block';
+    tip.style.left = Math.min(r.width - 70, Math.max(70, px / c.VW * r.width)) + 'px';
+  },
+  editMig(){
+    if (!isAdmin()) return;
+    const mc = migCfg();
+    openForm({ title:'Migräne & Luftdruck', fields:[
+      { k:'members', label:'Wer bekommt die Migräne-Funktion?', type:'persons' },
+      [{ k:'threshold', label:'Warnen ab einer Änderung von', type:'select', options:[3,4,5,6,8,10].map(v => [String(v), `${v} hPa in 24 Std.`]) },
+       { k:'direction', label:'Richtung', type:'select', options:[['both','fallend und steigend'], ['fall','nur fallend']] }]],
+      values:{ members:mc.members || [], threshold:String(mc.threshold || 5), direction:mc.direction || 'both' },
+      onSave: v => {
+        Store.save({ ...mc, id:'config-migraene', type:'config', status:'ok', createdBy:mc.createdBy || S.me.id, createdAt:mc.createdAt || new Date().toISOString(), members:v.members, threshold:+v.threshold, direction:v.direction });
+        loadWeather(); toast('Gespeichert');
+      } });
   },
   wxPlace(){
     if (!isAdmin()) return;

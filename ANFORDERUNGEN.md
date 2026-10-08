@@ -81,6 +81,14 @@ Geplant per /grill-me, Entscheidungen:
 - Personenkarten auf Tablets (ab 560 px) immer zwei pro Zeile
 - **Aufgaben & Pinnwand** zu einem Bereich zusammengefasst (zwei Reiter ✅ Aufgaben / 📌 Pinnwand); „+“ legt je nach Reiter Aufgabe oder Pinnwand-Eintrag an; auf dem Handy über „Aufgaben“ in der unteren Leiste erreichbar
 
+## Version 7 (09.10.2026) – Migräne & Luftdruck (Teil 1: Warnungen)
+- **Verwaltung → 🤕 Migräne & Luftdruck** (nur Admin): Personen auswählen, die die Funktion brauchen; Warnschwelle (3/4/5/6/8/10 hPa in 24 Std., Standard 5) und Richtung (fallend und steigend / nur fallend)
+- **Warnung „läuft“** (rot): eine Änderung über der Schwelle ist gerade im Gange (24-Std.-Fenster, das jetzt bzw. in den nächsten 12 Std. endet)
+- **Warnung „erwartet“** (gelb): eine Änderung über der Schwelle beginnt innerhalb der nächsten 48 Std. – mit Startzeit und Stärke
+- Anzeige oben in der Personenkarte der ausgewählten Personen; Antippen öffnet das Wetter-Pop-up beim neuen Abschnitt **🌀 Luftdruck** (aktueller Wert, Änderung seit gestern, Warnungen, Grafik letzte 24 Std. + nächste 48 Std. mit markierten Zeitfenstern)
+- Daten: Open-Meteo (`pressure_msl`, stündlich, inkl. letzter 24 Std.)
+- Teil 2 (offen): Migräne-Tagebuch mit Schnell-Erfassung, Kalender, Auswertung, Export
+
 ## Stand
 - [x] Version 1 gebaut (`index.html`), Testmodus funktioniert
 - [x] Supabase eingerichtet (Projekt drwuqnwepaaqlafsktfa, Frankfurt), Familienkonto angelegt, Registrierung gesperrt, Live-Sync getestet
