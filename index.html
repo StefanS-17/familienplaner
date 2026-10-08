@@ -88,6 +88,8 @@ svg.i.sm{width:18px;height:18px}
 .grid{display:grid;gap:14px;grid-template-columns:1fr}
 @media (min-width:700px){.grid.two{grid-template-columns:1fr 1fr}}
 @media (min-width:1200px){.grid.two{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}}
+/* Personenkarten: auf Tablets (und größer) immer zwei pro Zeile */
+@media (min-width:560px){.grid.pgrid{grid-template-columns:1fr 1fr}}
 .pcard{padding:0;overflow:hidden}
 .pcard .ph{display:flex;align-items:center;gap:10px;padding:12px 16px;background:color-mix(in srgb,var(--c) 14%,var(--card));border-bottom:3px solid var(--c);font-weight:700}
 .pcard .pb{padding:12px 16px}
@@ -942,7 +944,7 @@ function vHeute(){
   if (hol) h += `<div class="banner warn">🏖️ <span><b>${esc(hol.name)}</b> bis ${fmtShort(hol.to)} – kein Stundenplan</span></div>`;
   h += weatherWidget(ds);
   const famEv = occ.filter(o => !o.e.persons || !o.e.persons.length);
-  h += `<div class="grid two">`;
+  h += `<div class="grid pgrid">`;
   for (const m of members().filter(m => S.filter.has(m.id))){
     const ev = occ.filter(o => o.e.persons && o.e.persons.includes(m.id) && o.e.category !== 'pruefung');
     const ts = [...learnTasks(m.id, ds), ...tasksFor(m.id, ds)];
@@ -1129,7 +1131,7 @@ function vSchule(){
   const tab = S.sub.schule || 'stundenplan';
   let h = `<div class="toolbar"><div class="seg"><button class="${tab==='stundenplan'?'on':''}" onclick="A.sub('schule','stundenplan')">Stundenplan</button><button class="${tab==='pruefungen'?'on':''}" onclick="A.sub('schule','pruefungen')">📝 Prüfungen</button><button class="${tab==='sport'?'on':''}" onclick="A.sub('schule','sport')">Sport</button><button class="${tab==='ferien'?'on':''}" onclick="A.sub('schule','ferien')">Ferien</button></div></div>`;
   if (tab === 'pruefungen'){
-    h += `<div class="toolbar"><button class="btn" onclick="A.editExam()">${ic('plus','sm')} Prüfung</button><span class="muted small">Prüfungen der nächsten 14 Tage stehen mit Countdown auf der Startseite.</span></div><div class="grid two">`;
+    h += `<div class="toolbar"><button class="btn" onclick="A.editExam()">${ic('plus','sm')} Prüfung</button><span class="muted small">Prüfungen der nächsten 14 Tage stehen mit Countdown auf der Startseite.</span></div><div class="grid pgrid">`;
     for (const k of kids()){
       const up = upcomingExams(k.id), past = exams().filter(e => (e.persons || []).includes(k.id) && daysUntil(e.date) < 0).sort((a,b) => b.date.localeCompare(a.date));
       h += `<div class="card pcard" style="--c:${k.color};margin:0"><div class="ph">${avatar(k)}${esc(k.name)}</div><div class="pb">${up.length ? up.map(examRow).join('') : '<div class="empty">Keine anstehenden Prüfungen.</div>'}
