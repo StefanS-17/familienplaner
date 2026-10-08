@@ -52,5 +52,6 @@ Farben, Rollen und PINs lassen sich in der App unter **Verwaltung** ändern.
 - [x] Online unter https://stefans-17.github.io/familienplaner/
 - [x] Edge Function `google-kalender` in Supabase angelegt und getestet (06.10.2026)
 - [x] Google Familienkalender verknüpft (geheime Adresse funktioniert)
-- [ ] Prüfen, warum der verknüpfte Kalender nur 5 ältere Termine (bis 22.07.2026) liefert – richtiger Kalender? Google-Verzögerung? Test: Termin „Jakob Test“ anlegen
+- [x] Google-Termine kommen an und werden per Name richtig zugeordnet (geprüft 08.10.2026)
+- [x] App-Symbole (PNG) für iPhone/iPad und Android
 - [ ] App auf den Geräten der Familie installieren
