@@ -806,12 +806,7 @@ function vHeute(){
   if (hol) h += `<div class="banner warn">🏖️ <span><b>${esc(hol.name)}</b> bis ${fmtShort(hol.to)} – kein Stundenplan</span></div>`;
   h += weatherWidget(ds);
   if (pc) h += `<div class="banner warn" style="cursor:pointer" onclick="A.go('freigaben')">🔔 <span><b>${pc} ${pc===1?'Vorschlag wartet':'Vorschläge warten'}</b> auf deine Freigabe</span></div>`;
-  if (meals.length || pinned.length){
-    h += `<div class="grid two">`;
-    if (meals.length) h += `<div class="card"><h3>🍽️ Essen</h3>${meals.map(m => `<div class="row" style="padding:3px 0"><span class="muted small" style="width:60px">${m.slot==='mittag'?'Mittag':'Abend'}</span><span>${esc(m.text)}</span>${pendTag(m)}</div>`).join('')}</div>`;
-    if (pinned.length) h += `<div class="card"><h3>📌 Angepinnt</h3>${pinned.map(n => `<div style="padding:4px 0;cursor:pointer" onclick="A.go('pinnwand')"><b>${esc(n.title)}</b> <span class="muted small">· ${esc(mem(n.createdBy)?.name||'')}</span></div>`).join('')}</div>`;
-    h += `</div>`;
-  }
+  if (meals.length) h += `<div class="card"><h3>🍽️ Essen</h3>${meals.map(m => `<div class="row" style="padding:3px 0"><span class="muted small" style="width:60px">${m.slot==='mittag'?'Mittag':'Abend'}</span><span>${esc(m.text)}</span>${pendTag(m)}</div>`).join('')}</div>`;
   const famEv = occ.filter(o => !o.e.persons || !o.e.persons.length);
   h += `<div class="grid two">`;
   for (const m of members().filter(m => S.filter.has(m.id))){
@@ -826,6 +821,7 @@ function vHeute(){
   }
   h += `</div>`;
   if (famEv.length) h += `<div class="card"><h3>👪 Ganze Familie</h3>${famEv.map(o => evRow(o)).join('')}</div>`;
+  if (pinned.length) h += `<div class="card" style="margin-top:14px"><h3>📌 Angepinnt</h3>${pinned.map(n => `<div style="padding:4px 0;cursor:pointer" onclick="A.go('pinnwand')"><b>${esc(n.title)}</b> <span class="muted small">· ${esc(mem(n.createdBy)?.name||'')}</span></div>`).join('')}</div>`;
   return h;
 }
 
