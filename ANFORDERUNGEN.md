@@ -65,6 +65,18 @@ Farben, Rollen und PINs lassen sich in der App unter **Verwaltung** ändern.
 - Im Kalender rötlich hervorgehoben; Übersicht unter **Schule & Sport → Prüfungen** (kommende + vergangene je Kind)
 - Anlegen über: Schule & Sport → Prüfungen, „+“ auf der Startseite, oder im Terminformular Art „Prüfung“ wählen
 
+## Version 6 (09.10.2026) – Sterne & Belohnungen (Gamification, Version 1)
+Geplant per /grill-me, Entscheidungen:
+- Alle vier sammeln Sterne; **einlösen** können nur die Kinder. **Keine Rangliste**: Kinder sehen nur ihren eigenen Stand, Eltern alle, das Familienziel sehen alle. Start bei 0.
+- Sterne nur für **erledigte Aufgaben, Ämtli und Lern-Erinnerungen** (nicht fürs Anlegen). **Vertrauensmodus**: sofort beim Abhaken, Häkchen weg → Sterne weg; Eltern sehen einen **Verlauf** und können einzelne Vergaben zurücknehmen.
+- Sterne gehen an die **zugewiesene Person**; „Alle“-Aufgaben darf jeder abhaken, Sterne an den, der abhakt. Vorschläge (noch nicht bestätigt) bringen keine Sterne. Sterne **pro Erledigung**.
+- **Themen** mit Standard-Sternen (Admin verwaltet unter Verwaltung): 🏠 Haushalt 2, 🧸 Zimmer 2, 📚 Schule 2 (auch Lern-Erinnerungen), 🌳 Garten 3, 🐾 Tiere 2, 🤝 Mithelfen 1. Pro Aufgabe überschreibbar (beide Eltern); bestehende Aufgaben = Haushalt.
+- **Belohnungen**: Eltern legen an (mit Preis), Kinder schlagen Wünsche vor (Eltern setzen beim Bestätigen den Preis). **Einlösen**: Sterne werden reserviert → Freigabe → bei Bestätigung abgezogen, bei Ablehnung zurück. Einlösen nur mit genug Sternen; Stand darf durch Zurücknehmen ins Minus (rot).
+- Beispiel-Belohnungen: Extra-Tablet 15, Eis 20, später ins Bett 20, Lieblingsessen 30, Übernachtung 60, Kino 120. Keine Geld-Umrechnung.
+- **Familienziel**: ein aktives Ziel (Start: „Familienausflug“, 500 ⭐), zählt alle verdienten Sterne seit Zielstart; Ausgeben verringert es nicht; Feier beim Erreichen, dann neues Ziel.
+- Anzeige: ⭐ im Kopf der Personenkarte, Familienziel-Karte unter den Personen, neuer Bereich **⭐ Belohnungen** (Seitenleiste / „Mehr“).
+- Später separat planen: Wissens-Quiz, Serien & Abzeichen.
+
 ## Stand
 - [x] Version 1 gebaut (`index.html`), Testmodus funktioniert
 - [x] Supabase eingerichtet (Projekt drwuqnwepaaqlafsktfa, Frankfurt), Familienkonto angelegt, Registrierung gesperrt, Live-Sync getestet

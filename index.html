@@ -239,6 +239,31 @@ textarea.input{min-height:90px;resize:vertical}
 .detail-row{display:flex;gap:10px;padding:6px 0;font-size:15px}
 .detail-row .k{width:110px;flex:none;color:var(--muted);font-size:14px}
 .detail-row .v{white-space:pre-wrap;overflow-wrap:anywhere}
+/* Sterne & Belohnungen */
+.star-chip{margin-left:auto;font-size:13px;font-weight:700;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:2px 10px;cursor:pointer;white-space:nowrap}
+.star-chip.neg,.star-big.neg{color:var(--danger)}
+.star-big{font-size:30px;font-weight:800;line-height:1.1}
+.star-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.star-tile{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:var(--card2)}
+.star-tile b{font-size:18px}
+.goal-bar{height:14px;border-radius:999px;background:var(--card2);border:1px solid var(--line);overflow:hidden;margin:6px 0 8px}
+.goal-bar i{display:block;height:100%;background:linear-gradient(90deg,#f59e0b,#facc15);border-radius:999px;transition:width .6s}
+.goal.reached .goal-bar i{background:linear-gradient(90deg,#16a34a,#4ade80)}
+.reward-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+@media (max-width:480px){.reward{padding:10px}.reward .ri{font-size:24px}.reward .rn{font-size:14px}}
+.reward{border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--card2);display:flex;flex-direction:column;gap:6px;cursor:pointer}
+.reward .ri{font-size:30px;line-height:1}
+.reward .rn{font-weight:600;overflow-wrap:anywhere}
+.reward .rc{font-weight:800;color:color-mix(in srgb,#d97706 75%,var(--text))}
+.reward .btn{margin-top:auto}
+.hist{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.hist:last-child{border-bottom:0}
+.hist .lt{flex:1;min-width:0;overflow-wrap:anywhere}
+.hist .amt{font-weight:800;white-space:nowrap}
+.hist.revoked .lt,.hist.revoked .amt{text-decoration:line-through;color:var(--muted)}
+.confetti{position:fixed;inset:0;pointer-events:none;z-index:70;overflow:hidden}
+.confetti span{position:absolute;top:-40px;font-size:26px;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(110vh) rotate(540deg)}}
 /* Prüfungen */
 .ev.exam{background:color-mix(in srgb,#ef4444 9%,var(--card));border-radius:10px;padding:8px;margin:4px 0;border-bottom:0}
 .mc .lbl.exam{font-weight:700;background:color-mix(in srgb,#ef4444 14%,transparent);border-radius:3px}
@@ -326,6 +351,7 @@ const ICONS = {
   trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',
   brush:'<path d="M14 4l6 6-8 8-6-6z"/><path d="M6 12l-2.5 2.5a2.5 2.5 0 0 0 0 3.5l.5.5a2.5 2.5 0 0 0 3.5 0L10 16"/>',
+  star:'<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.8l6.1-.9z"/>',
   swap:'<path d="M16 3l4 4-4 4M20 7H8M8 21l-4-4 4-4M4 17h12"/>',
   pin:'<path d="M12 17v5M8 3h8l-1 7 3 3v2H6v-2l3-3z"/>',
   logo:'<rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/><circle cx="9" cy="14.5" r="1.4"/><circle cx="15" cy="14.5" r="1.4"/>'
@@ -481,6 +507,7 @@ function seedMembers(){
 function refreshMe(){ if (S.me){ const m = mem(S.me.id); if (m) S.me = m; else { S.me = null; S.screen = 'login'; } } }
 async function afterLoad(){
   if (!members().length) await Store.saveMany(seedMembers());
+  if (!find('config-sterne')) await seedStars();
   let hidden = [];
   try { const ui = JSON.parse(localStorage.getItem(LS_UI) || '{}'); hidden = ui.hidden || []; if (ui.view) S.view = ui.view; if (ui.shopDays) S.shopDays = ui.shopDays; } catch {}
   S.filter = new Set(members().map(m => m.id).filter(id => !hidden.includes(id)));
@@ -539,7 +566,7 @@ function evRow(o, showDate){
 
 const periodKey = (t, ds) => t.repeat === 'daily' ? ds : t.repeat === 'weekly' ? isoWeekKey(parse(ds)) : null;
 const isDone = (t, ds = todayStr()) => (t.repeat && t.repeat !== 'none') ? (t.doneKeys || []).includes(periodKey(t, ds)) : !!t.done;
-const canTick = t => isParent() || t.person === S.me.id;
+const canTick = t => isParent() || !t.person || t.person === S.me.id;
 const REPEAT = { none:'einmalig', daily:'täglich', weekly:'wöchentlich' };
 function taskRow(t, ds = todayStr()){
   const done = isDone(t, ds), p = mem(t.person);
@@ -550,7 +577,7 @@ function taskRow(t, ds = todayStr()){
   return `<div class="li ${done?'done':''} ${t.status==='pending'?'pending':''}">
     <button class="cb ${done?'on':''}" style="--c:${p?.color||'var(--ok)'}" ${canTick(t)?'':'disabled'} onclick="${tick}" aria-label="Erledigt">${done?ic('tick'):''}</button>
     <div class="lt" onclick="${open}"><div class="tt">${esc(t.title)}</div>
-    <div class="sub">${p ? avatar(p,'xs') + esc(p.name) : '<span>Alle</span>'}${t.learn ? `<span class="tag">📝 ${n <= 1 ? 'Prüfung morgen' : `Prüfung in ${n} Tagen`}</span>` : t.repeat && t.repeat!=='none' ? `<span class="tag">🔁 ${REPEAT[t.repeat]}</span>` : ''}${t.due && (!t.repeat||t.repeat==='none') ? `<span class="tag ${over?'red':''}">${over?'überfällig · ':''}bis ${fmtShort(t.due)}</span>` : ''}${pendTag(t)}</div></div></div>`;
+    <div class="sub">${p ? avatar(p,'xs') + esc(p.name) : '<span>Alle</span>'}${t.learn ? `<span class="tag">📝 ${n <= 1 ? 'Prüfung morgen' : `Prüfung in ${n} Tagen`}</span>` : t.repeat && t.repeat!=='none' ? `<span class="tag">🔁 ${REPEAT[t.repeat]}</span>` : ''}${t.due && (!t.repeat||t.repeat==='none') ? `<span class="tag ${over?'red':''}">${over?'überfällig · ':''}bis ${fmtShort(t.due)}</span>` : ''}<span class="tag">${(t.learn ? themeById('schule') : taskTheme(t)).icon} ⭐ ${t.learn ? themeStars('schule') : taskStars(t)}</span>${pendTag(t)}</div></div></div>`;
 }
 function tasksFor(personId, ds){
   return all('task').filter(t => {
@@ -560,6 +587,60 @@ function tasksFor(personId, ds){
     return !t.due || t.due <= ds || ds === todayStr();
   });
 }
+/* Sterne: Themen, Konto, Belohnungen, Familienziel */
+const STAR_THEMES = [{ id:'haushalt', icon:'🏠', name:'Haushalt', stars:2 }, { id:'zimmer', icon:'🧸', name:'Zimmer', stars:2 }, { id:'schule', icon:'📚', name:'Schule', stars:2 },
+  { id:'garten', icon:'🌳', name:'Garten', stars:3 }, { id:'tiere', icon:'🐾', name:'Tiere', stars:2 }, { id:'helfen', icon:'🤝', name:'Mithelfen', stars:1 }];
+const starCfg = () => find('config-sterne') || { id:'config-sterne', type:'config', status:'ok', themes:STAR_THEMES };
+const themeById = id => starCfg().themes.find(t => t.id === id) || starCfg().themes[0] || { id:'', icon:'⭐', name:'Sonstiges', stars:1 };
+const themeStars = id => +themeById(id).stars || 0;
+const taskTheme = t => themeById(t.theme || 'haushalt');
+const taskStars = t => t.stars != null && t.stars !== '' ? +t.stars : +taskTheme(t).stars || 0;
+const starEntries = () => all('star').filter(x => !x.revoked);
+const earned = pid => starEntries().filter(x => x.person === pid).reduce((a, x) => a + (+x.amount || 0), 0);
+const spent = pid => all('redeem').filter(r => r.person === pid).reduce((a, r) => a + (+r.cost || 0), 0);   // offen (reserviert) + eingelöst
+const reserved = pid => all('redeem').filter(r => r.person === pid && r.status === 'pending').reduce((a, r) => a + (+r.cost || 0), 0);
+const balance = pid => earned(pid) - spent(pid);
+const activeGoal = () => all('goal').filter(g => g.active).sort((a,b) => b.startedAt.localeCompare(a.startedAt))[0];
+const goalProgress = g => starEntries().filter(x => x.createdAt >= g.startedAt).reduce((a, x) => a + (+x.amount || 0), 0);
+const canSeeStars = pid => isParent() || pid === S.me?.id;
+async function seedStars(){
+  const now = new Date().toISOString(), base = { status:'ok', createdBy:'system', createdAt:now };
+  const rewards = [['📱','30 Min. extra Tablet/Fernsehen',15], ['🍦','Eis',20], ['🌙','30 Min. später ins Bett',20], ['🍝','Lieblingsessen aussuchen',30], ['🛏️','Freund/Freundin übernachtet',60], ['🎬','Kinobesuch',120]];
+  await Store.saveMany([{ id:'config-sterne', type:'config', themes:STAR_THEMES, ...base },
+    ...rewards.map(([icon, name, cost], i) => ({ id:'reward-start-' + (i + 1), type:'reward', icon, name, cost, ...base })),
+    { id:'goal-start', type:'goal', name:'Familienausflug', target:500, startedAt:now, active:true, ...base }]);
+}
+function bookStars(id, person, amount, reason, icon, on){
+  if (on) Store.save({ id, type:'star', person, amount, reason, icon, status:'ok', createdBy:S.me.id, createdAt:new Date().toISOString() });
+  else if (find(id)) Store.remove(id);
+}
+function starChip(pid){
+  if (!canSeeStars(pid)) return '';
+  const b = balance(pid);
+  return `<span class="star-chip ${b < 0 ? 'neg' : ''}" onclick="event.stopPropagation();A.go('belohnungen')" title="Sternestand">⭐ ${b}</span>`;
+}
+function goalCard(){
+  const g = activeGoal();
+  if (!g) return isParent() ? `<div class="card">🎯 Noch kein Familienziel. <a href="#" onclick="A.editGoal();return false">Ziel festlegen</a></div>` : '';
+  const p = goalProgress(g), pct = Math.min(100, Math.round(p / g.target * 100)), done = p >= g.target;
+  return `<div class="card goal ${done ? 'reached' : ''}"><h3><span class="grow">🎯 Familienziel: ${esc(g.name)}</span>${isParent() ? `<button class="icon-btn" style="width:34px;height:34px" onclick="A.editGoal('${g.id}')" aria-label="Ziel bearbeiten">${ic('edit','sm')}</button>` : ''}</h3>
+    <div class="goal-bar"><i style="width:${pct}%"></i></div>
+    <div class="row small"><b>${p} / ${g.target} ⭐</b><span class="spacer"></span><span class="muted">${done ? '🎉 Geschafft!' : `noch ${g.target - p} ⭐`}</span></div>
+    ${done && isParent() ? `<button class="btn sm" style="margin-top:10px" onclick="A.editGoal()">Neues Ziel setzen</button>` : ''}</div>`;
+}
+function confetti(){
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const box = document.createElement('div'); box.className = 'confetti';
+  box.innerHTML = Array.from({ length:40 }, () => `<span style="left:${Math.random() * 100}%;animation-delay:${Math.random() * .8}s;animation-duration:${2 + Math.random() * 1.5}s">${['🎉','⭐','🎊','✨'][Math.floor(Math.random() * 4)]}</span>`).join('');
+  document.body.appendChild(box); setTimeout(() => box.remove(), 4500);
+}
+function maybeCelebrate(){
+  const g = activeGoal(); if (!g || goalProgress(g) < g.target) return;
+  const k = 'familienapp.feier.' + g.id;
+  try { if (localStorage.getItem(k)) return; localStorage.setItem(k, '1'); } catch { return; }
+  confetti(); toast(`🎉 Familienziel „${g.name}“ erreicht!`);
+}
+
 /* Prüfungen: Countdown und Lern-Erinnerungen */
 const EXAM_TYPES = [['Schulaufgabe','Schulaufgabe'],['Kurzarbeit','Kurzarbeit'],['Test','Test / Ex'],['Referat','Referat'],['Abgabe','Abgabe / Projekt']];
 const daysUntil = ds => Math.round((parse(ds) - parse(todayStr())) / 864e5);
@@ -796,6 +877,7 @@ const NAV = [
   { id:'essen', label:'Einkauf & Essen', short:'Einkauf', icon:'cart' },
   { id:'schule', label:'Schule & Sport', short:'Schule', icon:'book' },
   { id:'pinnwand', label:'Pinnwand', icon:'note' },
+  { id:'belohnungen', label:'Belohnungen', icon:'star' },
   { id:'freigaben', label:'Freigaben', icon:'bell', parent:true },
   { id:'verwaltung', label:'Verwaltung', icon:'gear', admin:true }
 ];
@@ -804,6 +886,7 @@ const pendingCount = () => S.items.filter(i => i.status === 'pending').length;
 
 function render(){
   applyPrefs();
+  if (S.screen === 'app') setTimeout(maybeCelebrate, 300);
   const app = document.getElementById('app');
   const a = document.activeElement, keep = a && a.id && app.contains(a) ? { id:a.id, v:a.value, s:a.selectionStart } : null;
   if (S.screen === 'loading') app.innerHTML = `<div class="center"><div class="muted">Lade…</div></div>`;
@@ -819,7 +902,7 @@ function renderShell(){
   if (!navItems().some(n => n.id === S.view) && S.view !== 'mehr') S.view = 'heute';
   const pc = isParent() ? pendingCount() : 0;
   const cur = NAV.find(n => n.id === S.view) || NAV[0];
-  const views = { heute:vHeute, kalender:vKalender, aufgaben:vAufgaben, essen:vEssen, schule:vSchule, pinnwand:vPinnwand, freigaben:vFreigaben, verwaltung:vVerwaltung };
+  const views = { heute:vHeute, kalender:vKalender, aufgaben:vAufgaben, essen:vEssen, schule:vSchule, pinnwand:vPinnwand, belohnungen:vBelohnungen, freigaben:vFreigaben, verwaltung:vVerwaltung };
   const showFilter = ['heute','kalender','aufgaben'].includes(S.view);
   const side = navItems().map(n => `<button class="${S.view===n.id?'on':''}" onclick="A.go('${n.id}')">${ic(n.icon)}<span>${n.label}</span>${n.id==='freigaben'&&pc?`<span class="badge">${pc}</span>`:''}</button>`).join('');
   const bottomIds = ['heute','kalender','aufgaben','essen','schule'];
@@ -865,7 +948,7 @@ function vHeute(){
     const ts = [...learnTasks(m.id, ds), ...tasksFor(m.id, ds)];
     const ex = upcomingExams(m.id, 14);
     const tt = m.role === 'child' ? timetableToday(m.id, ds) : [];
-    h += `<div class="card pcard" style="--c:${m.color}"><div class="ph">${avatar(m)}${esc(m.name)}${m.id===S.me.id?' <span class="muted small" style="font-weight:400">(du)</span>':''}</div><div class="pb">
+    h += `<div class="card pcard" style="--c:${m.color}"><div class="ph">${avatar(m)}${esc(m.name)}${m.id===S.me.id?' <span class="muted small" style="font-weight:400">(du)</span>':''}${starChip(m.id)}</div><div class="pb">
       ${ex.length ? `<div class="sec-t">📝 Prüfungen</div>${ex.map(examRow).join('')}` : ''}
       <div class="sec-t">Termine</div>${ev.length ? ev.map(o => evRow(o)).join('') : '<div class="empty">Keine Termine</div>'}
       ${tt.length ? `<div class="sec-t">Stundenplan</div>${tt.map(l => `<div class="row small" style="padding:2px 0"><span class="muted" style="width:22px">${l.r}.</span><b>${esc(l.fach)}</b>${l.raum?`<span class="muted">${esc(l.raum)}</span>`:''}${l.time?`<span class="spacer"></span><span class="muted">${esc(l.time)}</span>`:''}</div>`).join('')}` : ''}
@@ -874,6 +957,7 @@ function vHeute(){
   }
   h += `</div>`;
   if (famEv.length) h += `<div class="card"><h3>👪 Ganze Familie</h3>${famEv.map(o => evRow(o)).join('')}</div>`;
+  h += goalCard();
   // Alles weitere (Freigaben, Essen, Pinnwand …) steht unter den Personen
   h += `<div style="margin-top:14px"></div>`;
   if (pc) h += `<div class="banner warn" style="cursor:pointer" onclick="A.go('freigaben')">🔔 <span><b>${pc} ${pc===1?'Vorschlag wartet':'Vorschläge warten'}</b> auf deine Freigabe</span></div>`;
@@ -1095,13 +1179,15 @@ function vPinnwand(){
 }
 
 /* ----- Freigaben ----- */
-const TYPE_L = { event:'📅 Termin', task:'✅ Aufgabe', shop:'🛒 Einkauf', meal:'🍽️ Essen', note:'📌 Pinnwand', holiday:'🏖️ Ferien', recipe:'📖 Rezept' };
+const TYPE_L = { event:'📅 Termin', task:'✅ Aufgabe', shop:'🛒 Einkauf', meal:'🍽️ Essen', note:'📌 Pinnwand', holiday:'🏖️ Ferien', recipe:'📖 Rezept', reward:'🎁 Belohnungswunsch', redeem:'🎁 Einlösen' };
 function summary(i){
   if (i.type === 'event') return `${esc(i.title)} <span class="muted small">· ${fmtShort(i.date)} ${timeLabel(i)}${i.repeat==='weekly'?' · wöchentlich':''}</span>`;
   if (i.type === 'task') return `${esc(i.title)} <span class="muted small">· ${esc(mem(i.person)?.name||'Alle')} · ${REPEAT[i.repeat||'none']}</span>`;
   if (i.type === 'shop') return esc(i.text);
   if (i.type === 'meal') return `${esc(i.text)} <span class="muted small">· ${fmtShort(i.date)} ${i.slot==='mittag'?'Mittag':'Abend'}</span>`;
   if (i.type === 'note') return `<b>${esc(i.title)}</b>${i.text?`<div class="small muted">${esc(i.text.slice(0,140))}</div>`:''}`;
+  if (i.type === 'reward') return `${i.icon || '🎁'} ${esc(i.name)} <span class="muted small">· Preis beim Bestätigen festlegen</span>`;
+  if (i.type === 'redeem') return `${esc(mem(i.person)?.name || '')} möchte <b>${esc(i.rewardName)}</b> einlösen <span class="muted small">· ${i.cost} ⭐ (Stand danach ${balance(i.person)} ⭐)</span>`;
   if (i.type === 'recipe') return `${esc(i.name)} <span class="muted small">· ${(i.ingredients||[]).length} Zutaten</span>`;
   if (i.type === 'holiday') return `${esc(i.name)} <span class="muted small">· ${fmtDate(i.from)} – ${fmtDate(i.to)}</span>`;
   return esc(i.id);
@@ -1114,6 +1200,36 @@ function vFreigaben(){
     return `<div class="li">${avatar(a)}<div class="lt"><div class="small muted">${TYPE_L[i.type]||i.type} · ${esc(a?.name||'')} · ${relTime(i.createdAt)}</div><div>${summary(i)}</div></div>${approveBtns(i.id)}</div>`; }).join('')}</div>`;
 }
 
+/* ----- Belohnungen ----- */
+function vBelohnungen(){
+  const me = S.me, kid = me.role === 'child';
+  let h = '';
+  if (isParent()){
+    h += `<div class="card"><h3>⭐ Sternestand</h3><div class="star-grid">${members().map(m => { const b = balance(m.id), r = reserved(m.id);
+      return `<div class="star-tile">${avatar(m)}<div><div class="small">${esc(m.name)}</div><b class="${b < 0 ? 'neg' : ''}" style="${b < 0 ? 'color:var(--danger)' : ''}">⭐ ${b}</b>${r ? `<div class="small muted">${r} reserviert</div>` : ''}</div></div>`; }).join('')}</div>
+      <p class="muted small" style="margin-bottom:0">Die Kinder sehen nur ihren eigenen Stand.</p></div>`;
+  } else {
+    const b = balance(me.id), r = reserved(me.id);
+    h += `<div class="card"><div class="row">${avatar(me,'lg')}<div><div class="muted small">Dein Sternestand</div><div class="star-big ${b < 0 ? 'neg' : ''}">⭐ ${b}</div>${r ? `<div class="small muted">${r} ⭐ sind für offene Anfragen reserviert</div>` : ''}</div></div></div>`;
+  }
+  h += goalCard();
+  const rs = all('reward').sort((a,b) => (a.status === 'pending') - (b.status === 'pending') || (a.cost ?? 1e9) - (b.cost ?? 1e9));
+  h += `<div class="card"><h3><span class="grow">🎁 Belohnungen</span>${isParent() ? `<button class="btn sm" onclick="A.editReward()">${ic('plus','sm')} Belohnung</button>` : `<button class="btn sec sm" onclick="A.editReward()">${ic('plus','sm')} Wunsch</button>`}</h3>
+    ${rs.length ? `<div class="reward-grid">${rs.map(r => { const pend = r.status === 'pending', b = kid ? balance(me.id) : 0;
+      return `<div class="reward ${pend ? 'pending' : ''}" onclick="A.editReward('${r.id}')"><span class="ri">${r.icon || '🎁'}</span><span class="rn">${esc(r.name)}</span>
+        ${pend ? `${pendTag(r)}${isParent() ? `<button class="btn ok sm" onclick="event.stopPropagation();A.editReward('${r.id}')">Preis festlegen</button>` : ''}` : `<span class="rc">⭐ ${r.cost}</span>`}
+        ${kid && !pend ? (b >= r.cost ? `<button class="btn sm" onclick="event.stopPropagation();A.redeem('${r.id}')">Einlösen</button>` : `<span class="small muted">noch ${r.cost - b} ⭐</span>`) : ''}</div>`; }).join('')}</div>`
+      : '<div class="empty">Noch keine Belohnungen.</div>'}</div>`;
+  const reqs = all('redeem').filter(r => isParent() || r.person === me.id).sort((a,b) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1) || b.createdAt.localeCompare(a.createdAt)).slice(0, 30);
+  if (reqs.length) h += `<div class="card"><h3>🎁 Einlösungen</h3>${reqs.map(r => `<div class="hist">${avatar(mem(r.person),'xs')}<div class="lt"><b>${esc(r.rewardName)}</b> <span class="muted small">· ${relTime(r.createdAt)}</span><div class="small ${r.status === 'pending' ? '' : 'muted'}">${r.status === 'pending' ? '⏳ wartet auf Freigabe' : '✅ eingelöst'}</div></div>
+    <span class="amt">−${r.cost} ⭐</span>${r.status === 'pending' && isParent() ? approveBtns(r.id) : ''}</div>`).join('')}</div>`;
+  const hist = all('star').filter(x => isParent() || x.person === me.id).sort((a,b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50);
+  h += `<div class="card"><h3>📜 Sterne-Verlauf</h3>${hist.length ? hist.map(x => `<div class="hist ${x.revoked ? 'revoked' : ''}">${avatar(mem(x.person),'xs')}<span>${x.icon || '⭐'}</span><div class="lt">${esc(x.reason)} <span class="muted small">· ${relTime(x.createdAt)}${x.revoked ? ' · zurückgenommen' : ''}</span></div>
+      <span class="amt">+${x.amount} ⭐</span>${isParent() ? `<button class="btn sec sm" onclick="A.revokeStar('${x.id}')" title="${x.revoked ? 'Wiederherstellen' : 'Zurücknehmen'}">${x.revoked ? '↺' : '↶'}</button>` : ''}</div>`).join('')
+    : '<div class="empty">Noch keine Sterne verdient. Sterne gibt es für erledigte Aufgaben, Ämtli und Lern-Erinnerungen.</div>'}</div>`;
+  return h;
+}
+
 /* ----- Verwaltung ----- */
 function vVerwaltung(){
   const ms = members();
@@ -1121,6 +1237,8 @@ function vVerwaltung(){
     <p class="muted small" style="margin-bottom:0"><b>Rechte:</b> Eltern dürfen alles anlegen, bearbeiten und löschen. Kinder sehen alles und dürfen Einträge anlegen – diese gelten als Vorschlag, bis ein Elternteil sie bestätigt. Eigene Aufgaben dürfen Kinder selbst abhaken.</p></div>`;
   const gs = all('gcal'), ex = (members().find(m => m.role === 'child') || members()[0])?.name || 'Name';
   const who = g => { const ps = (g.persons || []).map(mem).filter(Boolean); return ps.length ? ps.map(p => esc(p.name)).join(', ') : 'Ganze Familie'; };
+  h += `<div class="card"><h3><span class="grow">⭐ Sterne-Themen</span><button class="btn sm" onclick="A.editTheme()">${ic('plus','sm')} Thema</button></h3>${starCfg().themes.map(x => `<div class="li"><span style="font-size:22px">${x.icon}</span><div class="lt"><div class="tt"><b>${esc(x.name)}</b></div><div class="sub">Standard: ⭐ ${x.stars} pro Erledigung</div></div><button class="btn sec sm" onclick="A.editTheme('${x.id}')">${ic('edit','sm')} Bearbeiten</button></div>`).join('')}
+    <p class="muted small" style="margin-bottom:0">Neue Aufgaben übernehmen den Wert ihres Themas. Pro Aufgabe lässt er sich ändern.</p></div>`;
   const wl = wxLoc();
   h += `<div class="card"><h3><span class="grow">🌤️ Wetter</span><button class="btn sec sm" onclick="A.wxPlace()">${wl ? 'Ort ändern' : 'Ort festlegen'}</button></h3>
     <p class="muted small" style="margin:0">${wl ? `Vorhersage für <b>${esc(wl.name)}</b>${wl.region ? ' (' + esc(wl.region) + ')' : ''}.` : 'Noch kein Wohnort festgelegt.'} Die Wetterdaten kommen kostenlos von Open-Meteo.</p></div>`;
@@ -1253,9 +1371,13 @@ const A = {
   logout(){ S.me = null; localStorage.removeItem(LS_ME); S.screen = 'login'; S.loginFor = null; render(); },
 
   /* Freigaben */
-  approve(id){ const it = find(id); if (it) Store.save({ ...it, status:'ok', approvedBy:S.me.id }); },
+  approve(id){ const it = find(id); if (!it) return; if (it.type === 'reward' && it.status === 'pending') return A.editReward(id); Store.save({ ...it, status:'ok', approvedBy:S.me.id }); },
   reject(id){ const it = find(id); confirmBox(`Vorschlag von ${esc(mem(it?.createdBy)?.name||'')} ablehnen? Der Eintrag wird entfernt.`, () => Store.remove(id), 'Ablehnen'); },
-  approveAll(){ Store.saveMany(S.items.filter(i => i.status === 'pending').map(i => ({ ...i, status:'ok', approvedBy:S.me.id }))).then(render); },
+  approveAll(){
+    const ps = S.items.filter(i => i.status === 'pending'), skip = ps.filter(i => i.type === 'reward');
+    Store.saveMany(ps.filter(i => i.type !== 'reward').map(i => ({ ...i, status:'ok', approvedBy:S.me.id }))).then(render);
+    if (skip.length) toast('Belohnungswünsche bitte einzeln bestätigen – dabei den Preis festlegen');
+  },
   del(id){ confirmBox('Dieser Eintrag wird gelöscht.', () => Store.remove(id)); },
 
   /* Kalender */
@@ -1320,9 +1442,11 @@ const A = {
   toggleLearn(examId, personId, ds){
     const e = find(examId); if (!e || !(isParent() || personId === S.me.id)) return;
     const ld = { ...(e.learnDone || {}) }, keys = new Set(ld[personId] || []);
-    keys.has(ds) ? keys.delete(ds) : keys.add(ds);
+    const on = !keys.has(ds);
+    on ? keys.add(ds) : keys.delete(ds);
     ld[personId] = [...keys];
     Store.save({ ...e, learnDone:ld });
+    if (ok(e)) bookStars(`star-learn-${e.id}-${personId}-${ds}`, personId, themeStars('schule'), `Für ${e.subject || e.title} lernen`, themeById('schule').icon, on);
   },
   skipOne(id, ds){ const e = find(id); closeModal(); Store.save({ ...e, exceptions: [...(e.exceptions||[]), ds] }); toast(`Termin am ${fmtShort(ds)} abgesagt`); },
 
@@ -1335,10 +1459,19 @@ const A = {
         { k:'title', label:'Was ist zu tun?', required:true, ph: recurring ? 'z. B. Spülmaschine ausräumen' : 'z. B. Turnbeutel packen' },
         { k:'person', label:'Wer?', type:'select', options:[['','Alle / niemand Bestimmtes'], ...members().map(m => [m.id, m.name])] },
         [{ k:'repeat', label:'Wiederholung', type:'select', options:Object.entries(REPEAT) }, { k:'due', label:'Fällig am (einmalig)', type:'date' }],
+        isParent()
+          ? [{ k:'theme', label:'Thema', type:'select', options:starCfg().themes.map(x => [x.id, `${x.icon} ${x.name} (⭐ ${x.stars})`]),
+               attrs:`onchange="document.getElementById('f-stars').value=(starCfg().themes.find(x=>x.id===this.value)||{}).stars||0"` },
+             { k:'stars', label:'Sterne', type:'number', attrs:'min="0" max="100" inputmode="numeric"' }]
+          : { k:'theme', label:'Thema', type:'select', options:starCfg().themes.map(x => [x.id, `${x.icon} ${x.name}`]) },
         { k:'note', label:'Notiz', type:'textarea' }
       ],
-      values: t || { repeat: recurring ? 'weekly' : 'none', person: S.me.role==='child' ? S.me.id : '' },
-      onSave: v => { Store.save(t ? { ...t, ...v } : make('task', { ...v, done:false, doneKeys:[] })); toast(isParent() || t ? 'Gespeichert' : 'Als Vorschlag gespeichert'); } });
+      values: t ? { ...t, theme:taskTheme(t).id, stars:taskStars(t) } : { repeat: recurring ? 'weekly' : 'none', person: S.me.role==='child' ? S.me.id : '', theme:'haushalt', stars:themeStars('haushalt') },
+      onSave: v => {
+        // Sterne nur speichern, wenn sie vom Standard des Themas abweichen – dann folgen sie späteren Änderungen am Thema
+        if ('stars' in v) v.stars = v.stars === '' || +v.stars === themeStars(v.theme) ? null : Math.max(0, Math.round(+v.stars));
+        Store.save(t ? { ...t, ...v } : make('task', { ...v, done:false, doneKeys:[] })); toast(isParent() || t ? 'Gespeichert' : 'Als Vorschlag gespeichert');
+      } });
   },
   showTask(id){
     const t = find(id); if (!t) return;
@@ -1348,12 +1481,15 @@ const A = {
   toggleTask(id, ds){
     const t = find(id); if (!t || !canTick(t)) return;
     const u = { ...t };
+    let on, key = 'x';
     if (t.repeat && t.repeat !== 'none'){
-      const k = periodKey(t, ds), keys = new Set(t.doneKeys || []);
-      keys.has(k) ? keys.delete(k) : keys.add(k);
+      key = periodKey(t, ds); const keys = new Set(t.doneKeys || []);
+      on = !keys.has(key); on ? keys.add(key) : keys.delete(key);
       u.doneKeys = [...keys].slice(-60);
-    } else { u.done = !t.done; u.doneAt = u.done ? new Date().toISOString() : null; u.doneBy = u.done ? S.me.id : null; }
+    } else { u.done = on = !t.done; u.doneAt = u.done ? new Date().toISOString() : null; u.doneBy = u.done ? S.me.id : null; }
     Store.save(u);
+    // Sterne: an die zugewiesene Person, bei „Alle“-Aufgaben an den, der abhakt; Vorschläge bringen noch keine Sterne
+    if (ok(t)) bookStars(`star-${t.id}-${key}`, t.person || S.me.id, taskStars(t), t.title, taskTheme(t).icon, on);
   },
   toggleShowDone(){ S.showDone = !S.showDone; render(); },
 
@@ -1474,6 +1610,71 @@ const A = {
       values: n || { category: S.pinCat !== 'alle' ? S.pinCat : 'nachricht' },
       onSave: v => { Store.save(n ? { ...n, ...v } : make('note', v)); toast(isParent() || n ? 'Gespeichert' : 'Als Vorschlag gespeichert'); },
       extra: n ? `<button type="button" class="btn danger" style="width:100%;margin-top:10px" onclick="A.close();A.del('${n.id}')">${ic('trash','sm')} Löschen</button>` : '' });
+  },
+
+  /* Sterne & Belohnungen */
+  editReward(id){
+    const r = id ? find(id) : null;
+    if (r && !isParent()){
+      if (r.status !== 'pending') return;  // Kinder: Einlösen über den Knopf
+      return toast('Dein Wunsch wartet auf Mama oder Papa');
+    }
+    const parent = isParent();
+    openForm({ title: r ? (r.status === 'pending' ? 'Belohnungswunsch bestätigen' : 'Belohnung bearbeiten') : parent ? 'Neue Belohnung' : 'Belohnung wünschen', fields:[
+      [{ k:'icon', label:'Symbol', ph:'🎁', attrs:'maxlength="4"' }, ...(parent ? [{ k:'cost', label:'Preis in Sternen', type:'number', required:true, attrs:'min="1" max="10000" inputmode="numeric"' }] : [])],
+      { k:'name', label:'Belohnung', required:true, ph:'z. B. Eis essen gehen' }],
+      values: r ? { ...r, cost:r.cost ?? '' } : { icon:'🎁' },
+      onSave: v => {
+        const data = { icon:v.icon || '🎁', name:v.name, ...(parent ? { cost:Math.max(1, Math.round(+v.cost)) } : { cost:null }) };
+        if (r) Store.save({ ...r, ...data, ...(parent ? { status:'ok', approvedBy:S.me.id } : {}) });
+        else Store.save(make('reward', data));
+        toast(parent ? 'Gespeichert' : 'Wunsch gesendet – Mama oder Papa legen den Preis fest');
+      },
+      extra: r && parent ? `<button type="button" class="btn danger" style="width:100%;margin-top:10px" onclick="A.close();A.del('${r.id}')">${ic('trash','sm')} ${r.status === 'pending' ? 'Wunsch ablehnen' : 'Belohnung löschen'}</button>` : '' });
+  },
+  redeem(id){
+    const r = find(id); if (!r || S.me.role !== 'child' || r.status === 'pending') return;
+    if (balance(S.me.id) < r.cost) return toast('Dafür reichen deine Sterne noch nicht', true);
+    confirmBox(`<b>${esc(r.name)}</b> für <b>${r.cost} ⭐</b> einlösen? Die Sterne werden reserviert, bis Mama oder Papa zustimmen.`, () => {
+      Store.save(make('redeem', { person:S.me.id, rewardId:r.id, rewardName:r.name, cost:r.cost }));
+      toast('Anfrage gesendet ⭐');
+    }, 'Einlösen');
+  },
+  revokeStar(id){ if (!isParent()) return; const x = find(id); if (x) Store.save({ ...x, revoked:!x.revoked, revokedBy:S.me.id }); },
+  editGoal(id){
+    if (!isParent()) return;
+    const g = id ? find(id) : null;
+    openForm({ title: g ? 'Familienziel bearbeiten' : 'Neues Familienziel', fields:[
+      { k:'name', label:'Ziel', required:true, ph:'z. B. Familienausflug in den Freizeitpark' },
+      { k:'target', label:'Benötigte Sterne (alle zusammen)', type:'number', required:true, attrs:'min="10" max="100000" inputmode="numeric"' }],
+      values: g || { target:500 },
+      onSave: v => {
+        const target = Math.max(10, Math.round(+v.target));
+        if (g) return Store.save({ ...g, name:v.name, target });
+        const old = activeGoal(), now = new Date().toISOString();
+        const arr = [{ id:'goal-' + uid(), type:'goal', name:v.name, target, startedAt:now, active:true, status:'ok', createdBy:S.me.id, createdAt:now }];
+        if (old) arr.push({ ...old, active:false, endedAt:now, reached:goalProgress(old) >= old.target });
+        Store.saveMany(arr).then(render); render();
+        toast('Neues Familienziel gesetzt 🎯');
+      } });
+  },
+  editTheme(id){
+    if (!isAdmin()) return;
+    const cfg = starCfg(), x = id ? cfg.themes.find(t => t.id === id) : null;
+    openForm({ title: x ? 'Thema bearbeiten' : 'Neues Thema', fields:[
+      [{ k:'icon', label:'Symbol', ph:'⭐', attrs:'maxlength="4"' }, { k:'stars', label:'Standard-Sterne', type:'number', required:true, attrs:'min="0" max="100" inputmode="numeric"' }],
+      { k:'name', label:'Name', required:true, ph:'z. B. Garten' }],
+      values: x || { icon:'⭐', stars:2 },
+      onSave: v => {
+        const t = { id: x ? x.id : 'thema-' + uid(), icon:v.icon || '⭐', name:v.name, stars:Math.max(0, Math.round(+v.stars)) };
+        const themes = x ? cfg.themes.map(o => o.id === x.id ? t : o) : [...cfg.themes, t];
+        Store.save({ ...cfg, themes });
+      },
+      extra: x && cfg.themes.length > 1 ? `<button type="button" class="btn danger" style="width:100%;margin-top:10px" onclick="A.delTheme('${x.id}')">${ic('trash','sm')} Thema löschen</button>` : '' });
+  },
+  delTheme(id){
+    const cfg = starCfg(), x = cfg.themes.find(t => t.id === id); if (!x) return;
+    confirmBox(`Thema „${esc(x.name)}“ löschen? Aufgaben mit diesem Thema bekommen das erste Thema der Liste.`, () => Store.save({ ...cfg, themes:cfg.themes.filter(t => t.id !== id) }));
   },
 
   /* Wetter */
