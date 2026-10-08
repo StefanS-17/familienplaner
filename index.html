@@ -283,6 +283,31 @@ textarea.input{min-height:90px;resize:vertical}
 .seg button{white-space:nowrap}
 @media (max-width:480px){.seg button{padding:7px 10px;font-size:13px}}
 /* Migräne & Luftdruck */
+.mig-start{width:100%;margin-bottom:8px}
+.mig-pick{border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-bottom:8px;background:var(--card2)}
+.mig-btns{display:flex;gap:6px;margin-top:6px}
+.mig-btns .btn{flex:1;min-height:44px}
+.btn.mig-1{background:color-mix(in srgb,#dc2626 25%,var(--card));color:var(--text)}
+.btn.mig-2{background:color-mix(in srgb,#dc2626 55%,var(--card));color:#fff}
+.btn.mig-3{background:#b91c1c;color:#fff}
+.mig-now{display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border-radius:10px;margin-bottom:8px;font-size:14px;border:1px solid color-mix(in srgb,#dc2626 30%,var(--line));background:color-mix(in srgb,#dc2626 9%,var(--card))}
+.mig-now .lt{flex:1;min-width:0}
+.mig-now .row{margin-top:6px}
+.mig-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.mig-cal .wd{font-size:12px;text-align:center;color:var(--muted);font-weight:600}
+.mig-cal .c{position:relative;aspect-ratio:1/1;max-height:56px;border-radius:8px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;background:var(--card)}
+.mig-cal .c.out{opacity:.35}
+.mig-cal .c.today{outline:2px solid var(--accent);outline-offset:-1px}
+.mig-cal .c.m1{background:color-mix(in srgb,#dc2626 25%,var(--card))}
+.mig-cal .c.m2{background:color-mix(in srgb,#dc2626 55%,var(--card));color:#fff}
+.mig-cal .c.m3{background:#b91c1c;color:#fff}
+.mig-cal .c .pz{position:absolute;top:1px;right:3px;font-size:10px}
+.mig-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);margin-top:8px;align-items:center}
+.mig-legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px;border:1px solid var(--line)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.kpi{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px}
+.kpi .v{font-size:24px;font-weight:800;line-height:1.1}
+.kpi .k{font-size:12px;color:var(--muted)}
 .pwarn{display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border-radius:10px;margin-bottom:8px;cursor:pointer;font-size:14px;line-height:1.35}
 .pwarn .pi{font-size:18px;line-height:1.2}
 .pwarn.on{background:color-mix(in srgb,#ef4444 12%,var(--card));border:1px solid color-mix(in srgb,#ef4444 35%,var(--line))}
@@ -535,8 +560,8 @@ function saveUi(){ try { localStorage.setItem(LS_UI, JSON.stringify({ hidden:mem
 /* ---------- Ferien, Termine, Aufgaben ---------- */
 const holidays = () => all('holiday').filter(ok).sort((a,b) => a.from.localeCompare(b.from));
 const holidayOn = ds => holidays().find(h => ds >= h.from && ds <= h.to);
-const CATS = { termin:'Termin', training:'Training', spiel:'Spiel/Turnier', ausflug:'Ausflug', schule:'Schule', pruefung:'Prüfung', google:'Google Kalender' };
-const CAT_ICON = { termin:'📌', training:'🏃', spiel:'🏆', ausflug:'🚌', schule:'🎒', pruefung:'📝', google:'📆' };
+const CATS = { termin:'Termin', training:'Training', spiel:'Spiel/Turnier', ausflug:'Ausflug', schule:'Schule', pruefung:'Prüfung', migraene:'Migräne', google:'Google Kalender' };
+const CAT_ICON = { termin:'📌', training:'🏃', spiel:'🏆', ausflug:'🚌', schule:'🎒', pruefung:'📝', migraene:'🤕', google:'📆' };
 
 function occurrences(from, to, opts={}){
   const out = [];
@@ -557,6 +582,7 @@ function occurrences(from, to, opts={}){
   }
   const key = o => o.date + (o.e.allDay ? '0' : '1' + (o.e.start || ''));
   out.push(...gOccurrences(from, to, opts));
+  for (const x of all('migraine')) if (x.date >= from && x.date <= to && (opts.all || visible([x.person]))) out.push({ e:migEvent(x), date:x.date });
   return out.sort((a,b) => key(a).localeCompare(key(b)));
 }
 const timeLabel = e => e.allDay ? 'Ganztägig' : (e.start || '') + (e.end ? '–' + e.end : '');
@@ -865,6 +891,48 @@ const hasMig = id => (migCfg().members || []).includes(id);
 const hpa = v => (Math.round(Math.abs(v) * 10) / 10).toLocaleString('de-DE');
 const pWord = v => v < 0 ? 'fällt' : 'steigt';
 function whenLabel(t){ const n = daysUntil(t.slice(0,10)); return `${n === 0 ? 'heute' : n === 1 ? 'morgen' : n === -1 ? 'gestern' : WD[wdIdx(parse(t.slice(0,10)))]} ${t.slice(11,13)} Uhr`; }
+/* Migräne-Tagebuch: ein Eintrag pro Person und Tag */
+const MIG_INT = { 1:'leicht', 2:'mittel', 3:'stark' };
+const migOn = (pid, ds) => find(`mig-${pid}-${ds}`);
+const migEntries = pid => all('migraine').filter(x => x.person === pid).sort((a,b) => b.date.localeCompare(a.date));
+const canSeeMig = pid => S.me?.id === pid || (isParent() && mem(pid)?.role === 'child');
+const migEvent = x => ({ id:x.id, type:'migevent', category:'migraene', title:`Migräne (${MIG_INT[x.intensity] || ''})`, persons:[x.person], allDay:!x.start, start:x.start || '', end:x.end || '', status:'ok' });
+function migBlock(m, ds){
+  if (!hasMig(m.id)) return '';
+  const e = migOn(m.id, ds), self = S.me.id === m.id, today = ds === todayStr();
+  if (e) return `<div class="mig-now"><span>🤕</span><div class="lt"><b>Migräne ${today ? 'heute' : fmtShort(ds)} · ${MIG_INT[e.intensity]}</b>
+      <div class="small muted">${e.start ? 'seit ' + e.start + ' Uhr' : ''}${e.end ? ' · vorbei ' + e.end + ' Uhr' : ''}</div>
+      ${canSeeMig(m.id) ? `<div class="row wrap">${self && today && !e.end ? `<button class="btn sec sm" onclick="A.migEnd('${e.id}')">Vorbei</button>` : ''}<button class="btn sec sm" onclick="A.editMig2('${e.id}')">Details</button>${S.view !== 'migraene' ? `<button class="btn sec sm" onclick="A.openMigDiary('${m.id}')">Tagebuch</button>` : ''}</div>` : ''}</div></div>`;
+  if (!self || !today) return '';
+  if (S.migPick === m.id) return `<div class="mig-pick"><b class="small">Wie stark ist die Migräne?</b><div class="mig-btns"><button class="btn sm mig-1" onclick="A.migQuick(1)">leicht</button><button class="btn sm mig-2" onclick="A.migQuick(2)">mittel</button><button class="btn sm mig-3" onclick="A.migQuick(3)">stark</button><button class="btn sec sm" style="flex:0 0 44px" onclick="A.migPick(null)" aria-label="Abbrechen">✕</button></div></div>`;
+  return `<button class="btn sec sm mig-start" onclick="A.migPick('${m.id}')">🤕 Migräne erfassen</button>`;
+}
+// Luftdruck der letzten ~3 Monate für die Auswertung (einmal abrufen, 6 Std. merken)
+async function loadPressureHistory(){
+  const loc = wxLoc(); if (!loc || W.archLoading) return;
+  const key = loc.lat + ',' + loc.lon;
+  if (W.arch?.key === key && Date.now() - W.arch.at < 6 * 3600e3) return;
+  W.archLoading = true;
+  try {
+    const j = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&timezone=auto&past_days=92&forecast_days=1&hourly=pressure_msl`)).json();
+    W.arch = { key, at:Date.now(), time:j.hourly.time, p:j.hourly.pressure_msl };
+  } catch { W.arch = null; }
+  W.archLoading = false;
+  if (S.view === 'migraene') render();
+}
+// Tage mit starker Luftdruck-Änderung (gilt auch für den Folgetag, wenn sie ab 12 Uhr auftrat)
+function strongPressureDays(){
+  const a = W.arch; if (!a?.p) return null;
+  const cfg = migCfg(), thr = +cfg.threshold || 5, fallOnly = cfg.direction === 'fall', set = new Set();
+  for (let i = 24; i < a.p.length; i++){
+    const v = a.p[i] != null && a.p[i-24] != null ? a.p[i] - a.p[i-24] : null;
+    if (v == null || !(fallOnly ? v <= -thr : Math.abs(v) >= thr)) continue;
+    const day = a.time[i].slice(0,10); set.add(day);
+    if (+a.time[i].slice(11,13) >= 12) set.add(ymd(addDays(parse(day), 1)));
+  }
+  return { set, from: ymd(addDays(parse(a.time[0].slice(0,10)), 2)), to: todayStr() };
+}
+
 function pressureInfo(){
   const d = wxData(), p = d?.hourly?.pressure_msl; if (!p) return null;
   const hr = d.hourly, now = hr.time.findIndex(t => t.slice(0,13) === d.current.time.slice(0,13)); if (now < 0) return null;
@@ -944,10 +1012,11 @@ const NAV = [
   { id:'essen', label:'Einkauf & Essen', short:'Einkauf', icon:'cart' },
   { id:'schule', label:'Schule & Sport', short:'Schule', icon:'book' },
   { id:'belohnungen', label:'Belohnungen', icon:'star' },
+  { id:'migraene', label:'Migräne-Tagebuch', icon:'note', hidden:true },
   { id:'freigaben', label:'Freigaben', icon:'bell', parent:true },
   { id:'verwaltung', label:'Verwaltung', icon:'gear', admin:true }
 ];
-const navItems = () => NAV.filter(n => (!n.parent || isParent()) && (!n.admin || isAdmin()));
+const navItems = () => NAV.filter(n => !n.hidden && (!n.parent || isParent()) && (!n.admin || isAdmin()));
 const pendingCount = () => S.items.filter(i => i.status === 'pending').length;
 
 function render(){
@@ -966,10 +1035,11 @@ function render(){
 
 function renderShell(){
   if (S.view === 'pinnwand'){ S.view = 'aufgaben'; S.sub.aufgaben = 'pinnwand'; }
-  if (!navItems().some(n => n.id === S.view) && S.view !== 'mehr') S.view = 'heute';
+  const migOk = S.view === 'migraene' && hasMig(S.migFor || S.me.id) && canSeeMig(S.migFor || S.me.id);
+  if (!navItems().some(n => n.id === S.view) && S.view !== 'mehr' && !migOk) S.view = 'heute';
   const pc = isParent() ? pendingCount() : 0;
   const cur = NAV.find(n => n.id === S.view) || NAV[0];
-  const views = { heute:vHeute, kalender:vKalender, aufgaben:vAufgaben, essen:vEssen, schule:vSchule, pinnwand:vPinnwand, belohnungen:vBelohnungen, freigaben:vFreigaben, verwaltung:vVerwaltung };
+  const views = { heute:vHeute, kalender:vKalender, aufgaben:vAufgaben, essen:vEssen, schule:vSchule, pinnwand:vPinnwand, belohnungen:vBelohnungen, migraene:vMigraene, freigaben:vFreigaben, verwaltung:vVerwaltung };
   const showFilter = ['heute','kalender'].includes(S.view) || (S.view === 'aufgaben' && S.sub.aufgaben !== 'pinnwand');
   const side = navItems().map(n => `<button class="${S.view===n.id?'on':''}" onclick="A.go('${n.id}')">${ic(n.icon)}<span>${n.label}</span>${n.id==='freigaben'&&pc?`<span class="badge">${pc}</span>`:''}</button>`).join('');
   const bottomIds = ['heute','kalender','aufgaben','essen','schule'];
@@ -979,7 +1049,7 @@ function renderShell(){
   const fab = { kalender:'A.newEvent()', aufgaben: S.sub.aufgaben === 'pinnwand' ? 'A.newNote()' : 'A.newTask()', heute:'A.quickAdd()' }[S.view];
   return `<div class="shell">
     <nav class="side"><div class="logo"><span style="color:var(--accent)">${ic('logo')}</span>Familienplaner</div>${side}
-      <div class="spacer"></div><button onclick="A.settings()">${ic('brush')}<span>Meine Einstellungen</span></button><button onclick="A.logout()">${ic('swap')}<span>Person wechseln</span></button></nav>
+      <div class="spacer"></div>${hasMig(S.me.id) ? `<button class="${S.view==='migraene'?'on':''}" onclick="A.openMigDiary('${S.me.id}')"><span style="width:22px;text-align:center">🤕</span><span>Migräne-Tagebuch</span></button>` : ''}<button onclick="A.settings()">${ic('brush')}<span>Meine Einstellungen</span></button><button onclick="A.logout()">${ic('swap')}<span>Person wechseln</span></button></nav>
     <div class="main">
       <header class="top"><div class="grow"><h1>${cur.label}</h1><div class="sub">${fmtLong(todayStr())}</div></div>
         <button class="me-btn" onclick="A.meMenu()" title="Meine Einstellungen / Person wechseln">${avatar(S.me)}<span>${esc(S.me.name)}</span>${ic('more','sm')}</button></header>
@@ -1012,12 +1082,12 @@ function vHeute(){
   const pInfo = (migCfg().members || []).length ? pressureInfo() : null;
   h += `<div class="grid pgrid">`;
   for (const m of members().filter(m => S.filter.has(m.id))){
-    const ev = occ.filter(o => o.e.persons && o.e.persons.includes(m.id) && o.e.category !== 'pruefung');
+    const ev = occ.filter(o => o.e.persons && o.e.persons.includes(m.id) && o.e.category !== 'pruefung' && o.e.category !== 'migraene');
     const ts = [...learnTasks(m.id, ds), ...tasksFor(m.id, ds)];
     const ex = upcomingExams(m.id, 14);
     const tt = m.role === 'child' ? timetableToday(m.id, ds) : [];
     h += `<div class="card pcard" style="--c:${m.color}"><div class="ph">${avatar(m)}${esc(m.name)}${m.id===S.me.id?' <span class="muted small" style="font-weight:400">(du)</span>':''}${starChip(m.id)}</div><div class="pb">
-      ${hasMig(m.id) ? pressureBanner(pInfo) : ''}
+      ${hasMig(m.id) ? pressureBanner(pInfo) : ''}${migBlock(m, ds)}
       ${ex.length ? `<div class="sec-t">📝 Prüfungen</div>${ex.map(examRow).join('')}` : ''}
       <div class="sec-t">Termine</div>${ev.length ? ev.map(o => evRow(o)).join('') : '<div class="empty">Keine Termine</div>'}
       ${tt.length ? `<div class="sec-t">Stundenplan</div>${tt.map(l => `<div class="row small" style="padding:2px 0"><span class="muted" style="width:22px">${l.r}.</span><b>${esc(l.fach)}</b>${l.raum?`<span class="muted">${esc(l.raum)}</span>`:''}${l.time?`<span class="spacer"></span><span class="muted">${esc(l.time)}</span>`:''}</div>`).join('')}` : ''}
@@ -1272,6 +1342,66 @@ function vFreigaben(){
     return `<div class="li">${avatar(a)}<div class="lt"><div class="small muted">${TYPE_L[i.type]||i.type} · ${esc(a?.name||'')} · ${relTime(i.createdAt)}</div><div>${summary(i)}</div></div>${approveBtns(i.id)}</div>`; }).join('')}</div>`;
 }
 
+/* ----- Migräne-Tagebuch ----- */
+function vMigraene(){
+  const pid = S.migFor || S.me.id, m = mem(pid);
+  if (!m || !canSeeMig(pid)) return '<div class="empty">Kein Zugriff.</div>';
+  loadPressureHistory();
+  const es = migEntries(pid), today = todayStr(), mc = migCfg();
+  const base = parse(S.migMonth || today);
+  const inMonth = k => es.filter(e => e.date.startsWith(k));
+  const d90 = ymd(addDays(new Date(), -89)), last90 = es.filter(e => e.date >= d90);
+  const medMonth = inMonth(today.slice(0,7)).filter(e => (e.med || '').trim()).length;
+  const sp = strongPressureDays();
+  let h = `<div class="card"><div class="row wrap">${avatar(m,'lg')}<div class="grow" style="flex:1"><h2 style="margin:0">${S.me.id === pid ? 'Mein Migräne-Tagebuch' : 'Migräne-Tagebuch: ' + esc(m.name)}</h2>
+      <div class="muted small">Nur für ${S.me.id === pid ? 'dich' : esc(m.name)} sichtbar${m.role === 'child' ? ' (und für die Eltern)' : ''}. Im Kalender sieht die Familie nur „Migräne“ und die Stärke.</div></div></div>
+    ${S.me.id === pid ? `<div style="margin-top:12px">${migOn(pid, today) ? migBlock(m, today) : S.migPick === pid ? migBlock(m, today) : `<button class="btn" onclick="A.migPick('${pid}')">🤕 Migräne heute erfassen</button>`} <button class="btn sec" style="margin-top:6px" onclick="A.editMig2(null,'${pid}')">${ic('plus','sm')} Nachtragen</button></div>` : ''}</div>`;
+  // Kennzahlen
+  const cnt = k => inMonth(k).length;
+  const dist = [1,2,3].map(i => last90.filter(e => +e.intensity === i).length);
+  h += `<div class="card"><h3>📊 Auswertung</h3><div class="kpis">
+      <div class="kpi"><div class="v">${cnt(today.slice(0,7))}</div><div class="k">Migräne-Tage im ${MON[new Date().getMonth()]}</div></div>
+      <div class="kpi"><div class="v">${cnt(ymd(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)).slice(0,7))}</div><div class="k">im Vormonat</div></div>
+      <div class="kpi"><div class="v">${(Math.round(last90.length / 3 * 10) / 10).toLocaleString('de-DE')}</div><div class="k">Ø pro Monat (letzte 90 Tage)</div></div>
+      <div class="kpi"><div class="v" style="font-size:16px;padding-top:4px">${dist[0]} · ${dist[1]} · ${dist[2]}</div><div class="k">leicht · mittel · stark (90 Tage)</div></div>
+      <div class="kpi"><div class="v">${medMonth}</div><div class="k">Tage mit Medikament im ${MON[new Date().getMonth()]}</div></div></div>
+    ${medMonth >= 10 ? `<div class="banner warn" style="margin:10px 0 0">⚠️ <span>An ${medMonth} Tagen in diesem Monat wurde ein Medikament eingetragen. Ab etwa 10 Tagen im Monat (Triptane) bzw. 15 Tagen (einfache Schmerzmittel) warnen Fachgesellschaften vor Kopfschmerz durch Medikamentenübergebrauch – bitte ärztlich besprechen.</span></div>` : ''}</div>`;
+  // Zusammenhang mit dem Luftdruck
+  let pz = '';
+  if (!wxLoc()) pz = '<div class="muted small">Für diese Auswertung muss unter Verwaltung ein Wohnort für das Wetter festgelegt sein.</div>';
+  else if (!sp) pz = '<div class="muted small">Luftdruck-Daten werden geladen…</div>';
+  else {
+    const days = []; for (let d = parse(sp.from); ymd(d) <= sp.to; d = addDays(d, 1)) days.push(ymd(d));
+    const migSet = new Set(es.map(e => e.date)), md = days.filter(d => migSet.has(d));
+    const strong = days.filter(d => sp.set.has(d)), other = days.filter(d => !sp.set.has(d));
+    const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+    const mStrong = md.filter(d => sp.set.has(d)).length;
+    pz = md.length < 3 ? `<div class="muted small">Noch zu wenige Einträge für eine Aussage (${md.length} Migräne-Tage in den letzten ${days.length} Tagen). Ab etwa 5 Einträgen wird es aussagekräftig.</div>`
+      : `<div class="kpis"><div class="kpi"><div class="v">${mStrong} / ${md.length}</div><div class="k">Migräne-Tage mit starker Luftdruck-Änderung</div></div>
+         <div class="kpi"><div class="v">${pct(mStrong, strong.length)} %</div><div class="k">Migräne an Tagen <b>mit</b> starker Änderung (${strong.length} Tage)</div></div>
+         <div class="kpi"><div class="v">${pct(md.length - mStrong, other.length)} %</div><div class="k">Migräne an Tagen <b>ohne</b> starke Änderung (${other.length} Tage)</div></div></div>
+         <p class="muted small" style="margin-bottom:0">Zeitraum: letzte ${days.length} Tage · „stark“ = Änderung ab ${mc.threshold || 5} hPa in 24 Std.${mc.direction === 'fall' ? ' (nur fallend)' : ''}, auch am Vortag ab 12 Uhr. ${pct(mStrong, strong.length) > pct(md.length - mStrong, other.length) * 1.5 && md.length >= 5 ? '<b>Hinweis:</b> An Tagen mit Luftdruck-Änderung tritt deine Migräne deutlich häufiger auf.' : ''}</p>`;
+  }
+  h += `<div class="card"><h3>🌀 Zusammenhang mit dem Luftdruck</h3>${pz}</div>`;
+  // Monatskalender
+  const first = new Date(base.getFullYear(), base.getMonth(), 1), start = weekStart(first);
+  let cal = WD.map(w => `<div class="wd">${w}</div>`).join('');
+  for (let i = 0; i < 42; i++){
+    const d = addDays(start, i), ds = ymd(d), e = migOn(pid, ds);
+    if (i >= 35 && d.getMonth() !== base.getMonth()) break;
+    cal += `<div class="c ${d.getMonth() !== base.getMonth() ? 'out' : ''} ${ds === today ? 'today' : ''} ${e ? 'm' + e.intensity : ''}" ${e ? `onclick="A.showMig('${e.id}')" style="cursor:pointer"` : ''} title="${e ? 'Migräne ' + MIG_INT[e.intensity] : ''}">${d.getDate()}${sp?.set.has(ds) ? '<span class="pz">🌀</span>' : ''}</div>`;
+  }
+  h += `<div class="card"><h3><span class="grow">📅 ${MON[base.getMonth()]} ${base.getFullYear()}</span><button class="icon-btn" onclick="A.migMonth(-1)" aria-label="Vormonat">${ic('left')}</button><button class="icon-btn" onclick="A.migMonth(1)" aria-label="Nächster Monat">${ic('right')}</button></h3>
+    <div class="mig-cal">${cal}</div>
+    <div class="mig-legend"><span><i style="background:color-mix(in srgb,#dc2626 25%,var(--card))"></i>leicht</span><span><i style="background:color-mix(in srgb,#dc2626 55%,var(--card))"></i>mittel</span><span><i style="background:#b91c1c"></i>stark</span><span>🌀 starke Luftdruck-Änderung</span></div></div>`;
+  // Liste + Export
+  h += `<div class="card"><h3><span class="grow">📋 Einträge (${es.length})</span>${es.length ? `<button class="btn sec sm" onclick="A.migExport('${pid}')">Als Tabelle herunterladen</button>` : ''}</h3>
+    ${es.length ? es.slice(0, 60).map(e => `<div class="hist" onclick="A.showMig('${e.id}')" style="cursor:pointer"><span class="cd ${+e.intensity === 3 ? 'cd-red' : +e.intensity === 2 ? 'cd-orange' : 'cd-neutral'}">${MIG_INT[e.intensity]}</span><div class="lt"><b>${fmtShort(e.date)}</b> <span class="muted small">${e.start ? e.start + (e.end ? '–' + e.end : '') + ' Uhr' : ''}${e.med ? ' · 💊 ' + esc(e.med) : ''}${e.note ? ' · ' + esc(e.note.slice(0,60)) : ''}</span></div>${sp?.set.has(e.date) ? '<span title="starke Luftdruck-Änderung">🌀</span>' : ''}</div>`).join('')
+      : '<div class="empty">Noch keine Einträge. Bei einer Migräne einfach „Migräne erfassen“ tippen und die Stärke wählen.</div>'}</div>`;
+  h += `<p class="muted small">Dieses Tagebuch ersetzt keine ärztliche Beratung. Die Tabelle kannst du zum Arzttermin mitnehmen.</p>`;
+  return h;
+}
+
 /* ----- Belohnungen ----- */
 function vBelohnungen(){
   const me = S.me, kid = me.role === 'child';
@@ -1396,7 +1526,7 @@ function confirmBox(msg, yes, label = 'Löschen'){
 
 const EVENT_FIELDS = () => [
   { k:'title', label:'Titel', required:true, ph:'z. B. Zahnarzt, Fußballtraining' },
-  { k:'category', label:'Art', type:'select', options:Object.entries(CATS).filter(([k]) => k !== 'google'),
+  { k:'category', label:'Art', type:'select', options:Object.entries(CATS).filter(([k]) => k !== 'google' && k !== 'migraene'),
     attrs:`onchange="if(this.value==='pruefung')A.editExam(null,document.getElementById('f-date').value)"`, hint:'Für Schulaufgaben & Co. „Prüfung“ wählen – mit Countdown auf der Startseite.' },
   { k:'persons', label:'Wer ist dabei?', type:'persons' },
   [{ k:'date', label:'Datum', type:'date', required:true }, { k:'repeat', label:'Wiederholung', type:'select', options:[['none','Einmalig'],['weekly','Jede Woche']] }],
@@ -1414,9 +1544,9 @@ const A = {
   more(){
     const pc = isParent() ? pendingCount() : 0;
     const items = navItems().filter(n => !['heute','kalender','aufgaben','essen','schule'].includes(n.id));
-    openModal(`<h2>Mehr</h2><div class="sheet-list">${items.map(n => `<button onclick="A.go('${n.id}')">${ic(n.icon)} ${n.label}${n.id==='freigaben'&&pc?`<span class="badge">${pc}</span>`:''}</button>`).join('')}<button onclick="A.settings()">${ic('brush')} Meine Einstellungen</button><button onclick="A.close();A.logout()">${ic('swap')} Person wechseln</button></div>`);
+    openModal(`<h2>Mehr</h2><div class="sheet-list">${items.map(n => `<button onclick="A.go('${n.id}')">${ic(n.icon)} ${n.label}${n.id==='freigaben'&&pc?`<span class="badge">${pc}</span>`:''}</button>`).join('')}${hasMig(S.me.id) ? `<button onclick="A.openMigDiary('${S.me.id}')"><span style="font-size:20px;width:22px;text-align:center">🤕</span> Migräne-Tagebuch</button>` : ''}<button onclick="A.settings()">${ic('brush')} Meine Einstellungen</button><button onclick="A.close();A.logout()">${ic('swap')} Person wechseln</button></div>`);
   },
-  meMenu(){ openModal(`<div class="row" style="margin-bottom:10px">${avatar(S.me)}<h2 style="margin:0">${esc(S.me.name)}</h2></div><div class="sheet-list"><button onclick="A.settings()">${ic('brush')} Meine Einstellungen</button><button onclick="A.close();A.logout()">${ic('swap')} Person wechseln</button></div>`); },
+  meMenu(){ openModal(`<div class="row" style="margin-bottom:10px">${avatar(S.me)}<h2 style="margin:0">${esc(S.me.name)}</h2></div><div class="sheet-list">${hasMig(S.me.id) ? `<button onclick="A.openMigDiary('${S.me.id}')"><span style="font-size:20px;width:22px;text-align:center">🤕</span> Migräne-Tagebuch</button>` : ''}<button onclick="A.settings()">${ic('brush')} Meine Einstellungen</button><button onclick="A.close();A.logout()">${ic('swap')} Person wechseln</button></div>`); },
   close: closeModal,
   yes(){ const f = FORM.onYes; closeModal(); f(); },
   submitForm(e){ e.preventDefault(); const v = readForm(); if (!v) return; const f = FORM.onSave; closeModal(); f(v); },
@@ -1477,6 +1607,7 @@ const A = {
       } });
   },
   showEvent(id, ds){
+    if (find(id)?.type === 'migraine') return A.showMig(id);
     const e = find(id) || G.index[id]; if (!e) return;
     const isG = e.type === 'gevent';
     const row = (k,v) => v ? `<div class="detail-row"><span class="k">${k}</span><span class="v">${v}</span></div>` : '';
@@ -1687,6 +1818,53 @@ const A = {
       values: n || { category: S.pinCat !== 'alle' ? S.pinCat : 'nachricht' },
       onSave: v => { Store.save(n ? { ...n, ...v } : make('note', v)); toast(isParent() || n ? 'Gespeichert' : 'Als Vorschlag gespeichert'); },
       extra: n ? `<button type="button" class="btn danger" style="width:100%;margin-top:10px" onclick="A.close();A.del('${n.id}')">${ic('trash','sm')} Löschen</button>` : '' });
+  },
+
+  /* Migräne-Tagebuch */
+  migPick(pid){ S.migPick = pid; render(); },
+  migQuick(intensity){
+    const pid = S.migPick; if (!pid || pid !== S.me.id) return;
+    const pi = pressureInfo(), now = new Date();
+    Store.save({ id:`mig-${pid}-${todayStr()}`, type:'migraine', person:pid, date:todayStr(), start:hhmm(now), end:'', intensity, med:'', note:'',
+      pressure: pi ? { p:pi.current, d24:pi.change } : null, status:'ok', createdBy:S.me.id, createdAt:now.toISOString() });
+    S.migPick = null; render(); toast('Eingetragen – gute Besserung 💐');
+  },
+  migEnd(id){ const e = find(id); if (e && canSeeMig(e.person)) Store.save({ ...e, end:hhmm() }); },
+  openMigDiary(pid){ S.migFor = pid; S.migMonth = todayStr(); S.view = 'migraene'; closeModal(); render(); window.scrollTo(0,0); },
+  migMonth(n){ const b = parse(S.migMonth || todayStr()); S.migMonth = ymd(new Date(b.getFullYear(), b.getMonth() + n, 1)); render(); },
+  showMig(id){
+    const e = find(id); if (!e) return;
+    const p = mem(e.person), full = canSeeMig(e.person);
+    const row = (k, v) => v ? `<div class="detail-row"><span class="k">${k}</span><span class="v">${v}</span></div>` : '';
+    openModal(`<h2>🤕 Migräne · ${MIG_INT[e.intensity]}</h2>${row('Wer', avatar(p,'xs') + ' ' + esc(p?.name || ''))}${row('Wann', fmtLong(e.date) + (e.start ? ` · ${e.start}${e.end ? '–' + e.end : ''} Uhr` : ''))}
+      ${full ? row('Medikament', esc(e.med)) + row('Notiz', esc(e.note)) + (e.pressure ? row('Luftdruck', `${hpa(e.pressure.p)} hPa${e.pressure.d24 != null ? ` · ${pWord(e.pressure.d24)} um ${hpa(e.pressure.d24)} hPa in 24 Std.` : ''}`) : '') : ''}
+      <div class="actions">${full ? `<button class="btn sec" onclick="A.editMig2('${e.id}')">${ic('edit','sm')} Bearbeiten</button><button class="btn sec" onclick="A.openMigDiary('${e.person}')">Tagebuch</button>` : ''}<button class="btn sec" onclick="A.close()">Schließen</button></div>`);
+  },
+  editMig2(id, pidNew){
+    const e = id ? find(id) : null, pid = e ? e.person : pidNew;
+    if (!pid || !canSeeMig(pid)) return;
+    openForm({ title: e ? 'Migräne-Eintrag' : 'Migräne nachtragen', fields:[
+      [{ k:'date', label:'Datum', type:'date', required:true }, { k:'intensity', label:'Stärke', type:'select', options:[['1','leicht'],['2','mittel'],['3','stark']] }],
+      [{ k:'start', label:'Beginn', type:'time' }, { k:'end', label:'Vorbei um', type:'time' }],
+      { k:'med', label:'Medikament (optional)', ph:'z. B. Ibuprofen 400 oder Triptan' },
+      { k:'note', label:'Notiz (optional)', type:'textarea', ph:'z. B. wenig geschlafen, Stress, Zyklus …' }],
+      values: e ? { ...e, intensity:String(e.intensity) } : { date:todayStr(), intensity:'2' },
+      onSave: v => {
+        if (v.date > todayStr()){ toast('Das Datum liegt in der Zukunft', true); return; }
+        const nid = `mig-${pid}-${v.date}`, base = e || find(nid) || { type:'migraine', person:pid, status:'ok', createdBy:S.me.id, createdAt:new Date().toISOString(), pressure:null };
+        const item = { ...base, id:nid, date:v.date, intensity:+v.intensity, start:v.start, end:v.end, med:v.med, note:v.note };
+        if (e && e.id !== nid) Store.remove(e.id);   // Datum geändert
+        Store.save(item); toast('Gespeichert');
+      },
+      extra: e ? `<button type="button" class="btn danger" style="width:100%;margin-top:10px" onclick="A.close();A.del('${e.id}')">${ic('trash','sm')} Eintrag löschen</button>` : '' });
+  },
+  migExport(pid){
+    const rows = [['Datum','Beginn','Ende','Stärke','Medikament','Notiz','Luftdruck hPa','Änderung 24 Std. hPa']]
+      .concat(migEntries(pid).slice().reverse().map(e => [fmtDate(e.date), e.start || '', e.end || '', MIG_INT[e.intensity] || '', e.med || '', (e.note || '').replace(/\n/g,' '),
+        e.pressure ? String(Math.round(e.pressure.p * 10) / 10).replace('.', ',') : '', e.pressure?.d24 != null ? String(Math.round(e.pressure.d24 * 10) / 10).replace('.', ',') : '']));
+    const csv = '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv;charset=utf-8' }));
+    a.download = `migraene-tagebuch-${(mem(pid)?.name || 'person').toLowerCase()}-${todayStr()}.csv`; a.click(); URL.revokeObjectURL(a.href);
   },
 
   /* Sterne & Belohnungen */

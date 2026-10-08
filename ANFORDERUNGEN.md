@@ -87,7 +87,13 @@ Geplant per /grill-me, Entscheidungen:
 - **Warnung „erwartet“** (gelb): eine Änderung über der Schwelle beginnt innerhalb der nächsten 48 Std. – mit Startzeit und Stärke
 - Anzeige oben in der Personenkarte der ausgewählten Personen; Antippen öffnet das Wetter-Pop-up beim neuen Abschnitt **🌀 Luftdruck** (aktueller Wert, Änderung seit gestern, Warnungen, Grafik letzte 24 Std. + nächste 48 Std. mit markierten Zeitfenstern)
 - Daten: Open-Meteo (`pressure_msl`, stündlich, inkl. letzter 24 Std.)
-- Teil 2 (offen): Migräne-Tagebuch mit Schnell-Erfassung, Kalender, Auswertung, Export
+
+## Version 8 (09.10.2026) – Migräne-Tagebuch (Teil 2)
+- **Schnell-Erfassung mit 2 Klicks** in der eigenen Personenkarte (nur für Personen mit Migräne-Funktion): „🤕 Migräne erfassen“ → leicht / mittel / stark. Speichert Datum, Uhrzeit und den aktuellen Luftdruck (inkl. Änderung 24 Std.). Ein Eintrag pro Tag.
+- Danach in der Karte: Status, „Vorbei“, „Details“ (Beginn, Ende, Medikament, Notiz), „Tagebuch“
+- **Kalendereintrag** automatisch: „🤕 Migräne (mittel)“ in der Farbe der Person – die Familie sieht nur das
+- **Tagebuch im eigenen Konto** (Menü am Namen / Seitenleiste / „Mehr“): Kennzahlen (Tage im Monat, Vormonat, Ø 90 Tage, Stärke-Verteilung, Tage mit Medikament + Hinweis ab 10 Tagen), **Zusammenhang mit dem Luftdruck** (letzte ~90 Tage: Anteil Migräne an Tagen mit/ohne starke Änderung), Monatskalender (Stärke-Farben, 🌀-Markierung), Einträge, **Nachtragen**, **Export als Tabelle (CSV)** für den Arzt
+- Sichtbarkeit: Details & Auswertung nur für die Person selbst (bei Kindern auch Eltern)
 
 ## Stand
 - [x] Version 1 gebaut (`index.html`), Testmodus funktioniert
