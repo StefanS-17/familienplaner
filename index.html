@@ -234,6 +234,31 @@ textarea.input{min-height:90px;resize:vertical}
 .detail-row{display:flex;gap:10px;padding:6px 0;font-size:15px}
 .detail-row .k{width:110px;flex:none;color:var(--muted);font-size:14px}
 .detail-row .v{white-space:pre-wrap;overflow-wrap:anywhere}
+/* Wetter */
+.wx{display:block;width:100%;text-align:left;cursor:pointer;font:inherit;color:inherit;background:linear-gradient(135deg,color-mix(in srgb,#38bdf8 24%,var(--card)),var(--card) 75%)}
+.wx.night{background:linear-gradient(135deg,color-mix(in srgb,#6366f1 26%,var(--card)),var(--card) 75%)}
+.wx-main{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.wx-ic{font-size:52px;line-height:1}
+.wx-t{font-size:42px;font-weight:700;line-height:1;letter-spacing:-.02em}
+.wx-l{font-size:15px;color:var(--muted);margin-top:2px}
+.wx-side{margin-left:auto;text-align:right;font-size:14px;line-height:1.5}
+@media (max-width:480px){.wx-side{margin-left:0;text-align:left;width:100%}}
+.wx-hours{display:flex;gap:6px;margin-top:12px;overflow-x:auto;scrollbar-width:none}
+.wx-hours::-webkit-scrollbar{display:none}
+.wx-hours .h{flex:1 0 54px;text-align:center;background:color-mix(in srgb,var(--card) 75%,transparent);border:1px solid var(--line);border-radius:12px;padding:6px 2px;font-size:13px}
+.wx-hours .h .e{font-size:20px;line-height:1.4}
+.wx-more{font-size:13px;color:var(--accent);font-weight:600;margin-top:8px;text-align:right}
+.wx-strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px}
+.wx-h{flex:0 0 64px;text-align:center;border:1px solid var(--line);border-radius:12px;padding:8px 4px;background:var(--card2);font-size:14px}
+.wx-h .e{font-size:24px;line-height:1.4}
+.wx-h.now{border-color:var(--accent)}
+.rain{color:#0284c7;font-size:12px}
+.rainbar{height:4px;border-radius:2px;background:var(--line);margin:4px 6px 0;overflow:hidden}
+.rainbar i{display:block;height:100%;background:#0ea5e9}
+.wx-head{display:flex;align-items:center;gap:14px;margin:6px 0 4px}
+.wx-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin:12px 0}
+.wx-stat{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:13px;color:var(--muted)}
+.wx-stat b{display:block;font-size:16px;color:var(--text)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 90px);background:var(--text);color:var(--bg);padding:10px 18px;border-radius:12px;z-index:60;font-size:14px;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.2)}
 .toast.err{background:var(--danger);color:#fff}
 .sheet-list button{display:flex;align-items:center;gap:12px;width:100%;border:0;background:none;padding:14px 6px;border-bottom:1px solid var(--line);font-size:16px;text-align:left;position:relative}
@@ -382,6 +407,7 @@ const Store = {
       else { const it = p.new.data; const i = S.items.findIndex(x => x.id === it.id); if (i >= 0) S.items[i] = it; else S.items.push(it); }
       refreshMe(); render();
       if ((p.new?.type || p.old?.id || '').startsWith('gcal')) syncGoogle();
+      if ((p.new?.id || p.old?.id) === 'config-wetter') loadWeather(true);
     }).subscribe();
   },
   put(it){ const i = S.items.findIndex(x => x.id === it.id); if (i >= 0) S.items[i] = it; else S.items.push(it); },
@@ -434,6 +460,7 @@ async function afterLoad(){
   if (meId && mem(meId)){ S.me = mem(meId); S.screen = 'app'; } else S.screen = 'login';
   render();
   startGoogle();
+  startWeather();
 }
 function saveUi(){ try { localStorage.setItem(LS_UI, JSON.stringify({ hidden:members().map(m => m.id).filter(id => !S.filter.has(id)), view:S.view, shopDays:S.shopDays })); } catch {} }
 
@@ -643,6 +670,71 @@ function startGoogle(){
   syncGoogle();
 }
 
+/* ---------- Wetter (Open-Meteo: kostenlos, ohne Anmeldung) ---------- */
+const LS_WX = 'familienapp.wetter';
+const W = { data:null, loading:false, error:null, sel:0, found:[], timer:null };
+try { W.data = JSON.parse(localStorage.getItem(LS_WX) || 'null'); } catch {}
+const WX = { 0:['Klar','☀️','🌙'], 1:['Überwiegend klar','🌤️','🌙'], 2:['Teils bewölkt','⛅','☁️'], 3:['Bedeckt','☁️'], 45:['Nebel','🌫️'], 48:['Nebel mit Reif','🌫️'],
+  51:['Leichter Niesel','🌦️','🌧️'], 53:['Nieselregen','🌦️','🌧️'], 55:['Starker Niesel','🌧️'], 56:['Gefrierender Niesel','🌧️'], 57:['Gefrierender Niesel','🌧️'],
+  61:['Leichter Regen','🌦️','🌧️'], 63:['Regen','🌧️'], 65:['Starker Regen','🌧️'], 66:['Gefrierender Regen','🌧️'], 67:['Gefrierender Regen','🌧️'],
+  71:['Leichter Schneefall','🌨️'], 73:['Schneefall','🌨️'], 75:['Starker Schneefall','❄️'], 77:['Schneegriesel','🌨️'],
+  80:['Regenschauer','🌦️','🌧️'], 81:['Regenschauer','🌧️'], 82:['Heftige Schauer','⛈️'], 85:['Schneeschauer','🌨️'], 86:['Starke Schneeschauer','❄️'],
+  95:['Gewitter','⛈️'], 96:['Gewitter mit Hagel','⛈️'], 99:['Gewitter mit Hagel','⛈️'] };
+const wxLabel = c => (WX[c] || ['–'])[0];
+const wxIcon = (c, day = 1) => { const w = WX[c] || ['', '🌡️']; return !day && w[2] ? w[2] : w[1]; };
+const wxLoc = () => find('config-wetter');
+const hhmm = (d = new Date()) => pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+const deg = v => Math.round(v) + '°';
+const wxData = () => { const l = wxLoc(); return l && W.data?.key === l.lat + ',' + l.lon ? W.data : null; };
+async function loadWeather(force){
+  const loc = wxLoc(); if (!loc || W.loading) return;
+  const key = loc.lat + ',' + loc.lon;
+  if (!force && W.data?.key === key && Date.now() - W.data.at < 30 * 60e3) return;
+  W.loading = true;
+  try {
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&timezone=auto&forecast_days=7`
+      + '&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m'
+      + '&hourly=temperature_2m,weather_code,precipitation_probability,precipitation,is_day'
+      + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset,uv_index_max,wind_speed_10m_max');
+    if (!r.ok) throw new Error('Wetterdienst nicht erreichbar (' + r.status + ')');
+    W.data = { key, at:Date.now(), ...(await r.json()) }; W.error = null;
+    try { localStorage.setItem(LS_WX, JSON.stringify(W.data)); } catch {}
+  } catch (e){ W.error = e.message; }
+  W.loading = false;
+  if (S.screen === 'app' && S.view === 'heute') render();
+  if (document.getElementById('wx-pop')) A.weather(W.sel);
+}
+function startWeather(){
+  if (W.timer) return;
+  W.timer = setInterval(() => loadWeather(), 10 * 60e3);
+  setInterval(() => { const el = document.getElementById('wx-time'); if (el) el.textContent = hhmm(); }, 15e3);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadWeather(); });
+  loadWeather();
+}
+function weatherWidget(ds){
+  const loc = wxLoc();
+  if (!loc) return `<div class="card wx" style="cursor:default">🌤️ <b>Wetter</b> <span class="muted">– ${isAdmin() ? `<a href="#" onclick="A.wxPlace();return false">Wohnort festlegen</a>, dann erscheint hier die Vorhersage.` : 'Der Admin kann den Wohnort unter Verwaltung festlegen.'}</span></div>`;
+  const d = wxData();
+  if (!d) return `<div class="card wx" style="cursor:default"><span class="muted">${W.error ? '⚠️ ' + esc(W.error) : '🌤️ Wetter wird geladen…'}</span></div>`;
+  const di = d.daily.time.indexOf(ds); if (di < 0) return '';
+  const dl = d.daily, hr = d.hourly;
+  const hourCell = k => `<div class="h"><div class="muted">${hr.time[k].slice(11,13)} Uhr</div><div class="e">${wxIcon(hr.weather_code[k], hr.is_day[k])}</div><b>${deg(hr.temperature_2m[k])}</b>${hr.precipitation_probability[k] >= 20 ? `<div class="rain">💧${hr.precipitation_probability[k]}%</div>` : ''}</div>`;
+  const side = `<div class="small">↑ ${deg(dl.temperature_2m_max[di])} ↓ ${deg(dl.temperature_2m_min[di])} · 💧 ${dl.precipitation_probability_max[di] ?? 0}%</div>`;
+  if (di === 0){
+    const c = d.current, start = hr.time.findIndex(t => t.slice(0,13) > c.time.slice(0,13));
+    const hours = start < 0 ? [] : [0,1,2,3,4,5].map(n => start + n).filter(k => k < hr.time.length);
+    return `<button class="card wx ${c.is_day ? '' : 'night'}" onclick="A.weather(0)" aria-label="Wettervorhersage öffnen">
+      <div class="wx-main"><span class="wx-ic">${wxIcon(c.weather_code, c.is_day)}</span><div><div class="wx-t">${deg(c.temperature_2m)}</div><div class="wx-l">${wxLabel(c.weather_code)}</div></div>
+        <div class="wx-side"><div><b>📍 ${esc(loc.name)}</b></div><div class="muted">Jetzt · <span id="wx-time">${hhmm()}</span> Uhr</div>${side}<div class="muted small">gefühlt ${deg(c.apparent_temperature)} · Wind ${Math.round(c.wind_speed_10m)} km/h</div></div></div>
+      <div class="wx-hours">${hours.map(hourCell).join('')}</div><div class="wx-more">Vorhersage für die Woche ›</div></button>`;
+  }
+  const hours = [6,9,12,15,18,21].map(h => hr.time.indexOf(`${ds}T${pad2(h)}:00`)).filter(k => k >= 0);
+  return `<button class="card wx" onclick="A.weather(${di})" aria-label="Wettervorhersage öffnen">
+    <div class="wx-main"><span class="wx-ic">${wxIcon(dl.weather_code[di])}</span><div><div class="wx-t">${deg(dl.temperature_2m_max[di])}</div><div class="wx-l">${wxLabel(dl.weather_code[di])}</div></div>
+      <div class="wx-side"><div><b>📍 ${esc(loc.name)}</b></div><div class="muted">${fmtLong(ds)}</div>${side}</div></div>
+    <div class="wx-hours">${hours.map(hourCell).join('')}</div><div class="wx-more">Vorhersage für die Woche ›</div></button>`;
+}
+
 /* ---------- Render ---------- */
 const NAV = [
   { id:'heute', label:'Heute', icon:'home' },
@@ -712,6 +804,7 @@ function vHeute(){
   const pinned = all('note').filter(n => n.pinned && ok(n)).sort((a,b) => b.createdAt.localeCompare(a.createdAt)).slice(0,3);
   let h = `<div class="toolbar"><div class="seg"><button class="${S.dayOffset===0?'on':''}" onclick="A.day(0)">Heute</button><button class="${S.dayOffset===1?'on':''}" onclick="A.day(1)">Morgen</button></div><span class="muted small">${fmtLong(ds)}</span></div>`;
   if (hol) h += `<div class="banner warn">🏖️ <span><b>${esc(hol.name)}</b> bis ${fmtShort(hol.to)} – kein Stundenplan</span></div>`;
+  h += weatherWidget(ds);
   if (pc) h += `<div class="banner warn" style="cursor:pointer" onclick="A.go('freigaben')">🔔 <span><b>${pc} ${pc===1?'Vorschlag wartet':'Vorschläge warten'}</b> auf deine Freigabe</span></div>`;
   if (meals.length || pinned.length){
     h += `<div class="grid two">`;
@@ -966,6 +1059,9 @@ function vVerwaltung(){
     <p class="muted small" style="margin-bottom:0"><b>Rechte:</b> Eltern dürfen alles anlegen, bearbeiten und löschen. Kinder sehen alles und dürfen Einträge anlegen – diese gelten als Vorschlag, bis ein Elternteil sie bestätigt. Eigene Aufgaben dürfen Kinder selbst abhaken.</p></div>`;
   const gs = all('gcal'), ex = (members().find(m => m.role === 'child') || members()[0])?.name || 'Name';
   const who = g => { const ps = (g.persons || []).map(mem).filter(Boolean); return ps.length ? ps.map(p => esc(p.name)).join(', ') : 'Ganze Familie'; };
+  const wl = wxLoc();
+  h += `<div class="card"><h3><span class="grow">🌤️ Wetter</span><button class="btn sec sm" onclick="A.wxPlace()">${wl ? 'Ort ändern' : 'Ort festlegen'}</button></h3>
+    <p class="muted small" style="margin:0">${wl ? `Vorhersage für <b>${esc(wl.name)}</b>${wl.region ? ' (' + esc(wl.region) + ')' : ''}.` : 'Noch kein Wohnort festgelegt.'} Die Wetterdaten kommen kostenlos von Open-Meteo.</p></div>`;
   h += `<div class="card"><h3><span class="grow">📆 Google Kalender</span>${S.mode === 'cloud' ? `<button class="btn sm" onclick="A.editGcal()">${ic('plus','sm')} Kalender</button>` : ''}</h3>
     ${S.mode !== 'cloud' ? '<p class="muted small">Nur mit Cloud-Verbindung verfügbar.</p>' : gs.length ? gs.map(g => { const c = G.data[g.id];
       return `<div class="li"><span style="font-size:22px">📆</span><div class="lt"><div class="tt"><b>${esc(g.label)}</b></div><div class="sub">${!c ? 'wird geladen…' : c.error ? `<span class="tag red">${esc(c.error)}</span>` : `<span>${c.events.length} Termine · aktualisiert ${relTime(new Date(c.fetchedAt).toISOString())}</span>`}<span class="tag">ohne Namen → ${who(g)}</span>${g.matchNames !== false ? '<span class="tag">Namen erkennen</span>' : ''}</div></div><button class="btn sec sm" onclick="A.editGcal('${g.id}')">${ic('edit','sm')} Bearbeiten</button></div>`; }).join('')
@@ -1284,6 +1380,50 @@ const A = {
       values: n || { category: S.pinCat !== 'alle' ? S.pinCat : 'nachricht' },
       onSave: v => { Store.save(n ? { ...n, ...v } : make('note', v)); toast(isParent() || n ? 'Gespeichert' : 'Als Vorschlag gespeichert'); },
       extra: n ? `<button type="button" class="btn danger" style="width:100%;margin-top:10px" onclick="A.close();A.del('${n.id}')">${ic('trash','sm')} Löschen</button>` : '' });
+  },
+
+  /* Wetter */
+  weather(i = 0){
+    const loc = wxLoc(), d = wxData(); if (!loc || !d) return;
+    W.sel = i;
+    const dl = d.daily, hr = d.hourly, ds = dl.time[i], nowH = d.current.time.slice(0,13);
+    const hours = hr.time.map((t, k) => k).filter(k => hr.time[k].startsWith(ds) && (i > 0 || hr.time[k].slice(0,13) >= nowH));
+    const dayName = k => k === 0 ? 'Heute' : k === 1 ? 'Morgen' : `${WD[wdIdx(parse(dl.time[k]))]} ${parse(dl.time[k]).getDate()}.`;
+    const stat = (k, v) => `<div class="wx-stat">${k}<b>${v}</b></div>`;
+    openModal(`<div id="wx-pop"><h2 style="margin-bottom:4px">🌤️ Wetter in ${esc(loc.name)}</h2><div class="muted small">Aktualisiert ${relTime(new Date(d.at).toISOString())}</div>
+      <div class="chips" style="margin-top:12px">${dl.time.map((x, k) => `<button class="chip plain ${k === i ? 'on' : ''}" onclick="A.weather(${k})">${dayName(k)} ${wxIcon(dl.weather_code[k])} ${deg(dl.temperature_2m_max[k])}</button>`).join('')}</div>
+      <div class="wx-head"><span class="wx-ic">${i === 0 ? wxIcon(d.current.weather_code, d.current.is_day) : wxIcon(dl.weather_code[i])}</span><div>
+        <div class="wx-t">${i === 0 ? deg(d.current.temperature_2m) : deg(dl.temperature_2m_max[i])}</div>
+        <div class="wx-l">${fmtLong(ds)} · ${wxLabel(i === 0 ? d.current.weather_code : dl.weather_code[i])}</div></div></div>
+      <div class="wx-stats">${stat('Höchst / Tiefst', `${deg(dl.temperature_2m_max[i])} / ${deg(dl.temperature_2m_min[i])}`)}${stat('Regenrisiko', (dl.precipitation_probability_max[i] ?? 0) + ' %')}${stat('Regenmenge', String(dl.precipitation_sum[i] ?? 0).replace('.', ',') + ' mm')}${stat('Wind bis', Math.round(dl.wind_speed_10m_max[i]) + ' km/h')}${stat('Sonne', `🌅 ${dl.sunrise[i].slice(11)} · 🌇 ${dl.sunset[i].slice(11)}`)}${stat('UV-Index', Math.round(dl.uv_index_max[i] ?? 0))}</div>
+      <div class="sec-t">${i === 0 ? 'Die nächsten Stunden' : 'Stündlich'}</div>
+      <div class="wx-strip">${hours.map((k, n) => `<div class="wx-h ${i === 0 && n === 0 ? 'now' : ''}"><div class="muted small">${i === 0 && n === 0 ? 'Jetzt' : hr.time[k].slice(11,16)}</div><div class="e">${wxIcon(hr.weather_code[k], hr.is_day[k])}</div><b>${deg(hr.temperature_2m[k])}</b><div class="rain">💧${hr.precipitation_probability[k] ?? 0}%</div><div class="rainbar"><i style="width:${hr.precipitation_probability[k] ?? 0}%"></i></div></div>`).join('')}</div>
+      <div class="muted small" style="margin-top:6px">Wetterdaten: Open-Meteo.com</div>
+      <div class="actions"><button class="btn" onclick="A.close()">Schließen</button></div></div>`);
+    const st = document.querySelector('#wx-pop .wx-strip'); if (st && i > 0 && st.children[6]) st.scrollLeft = st.children[6].offsetLeft - st.offsetLeft;
+  },
+  wxPlace(){
+    if (!isAdmin()) return;
+    W.found = [];
+    openModal(`<h2>Wohnort für das Wetter</h2><form class="quick" onsubmit="A.wxSearch(event)"><input class="input" id="wx-q" placeholder="Ort oder PLZ, z. B. München" autocomplete="off"><button class="btn">Suchen</button></form><div id="wx-res"></div><div class="actions"><button class="btn sec" onclick="A.close()">Abbrechen</button></div>`);
+    setTimeout(() => document.getElementById('wx-q')?.focus(), 50);
+  },
+  async wxSearch(e){
+    e.preventDefault();
+    const q = document.getElementById('wx-q').value.trim(), res = document.getElementById('wx-res'); if (q.length < 2) return;
+    res.innerHTML = '<div class="empty">Suche…</div>';
+    try {
+      const j = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=de&format=json`)).json();
+      W.found = j.results || [];
+      res.innerHTML = W.found.length ? `<div class="sheet-list">${W.found.map((p, i) => `<button onclick="A.wxSet(${i})">📍 <span><b>${esc(p.name)}</b><br><span class="muted small">${esc([p.postcodes?.[0], p.admin2 !== p.name ? p.admin2 : '', p.admin1, p.country].filter(Boolean).join(' · '))}</span></span></button>`).join('')}</div>` : '<div class="empty">Kein Ort gefunden. Anders schreiben oder Postleitzahl versuchen.</div>';
+    } catch { res.innerHTML = '<div class="empty">Suche fehlgeschlagen – Internetverbindung prüfen.</div>'; }
+  },
+  wxSet(i){
+    const p = W.found[i]; if (!p) return;
+    closeModal();
+    Store.save({ ...(wxLoc() || { id:'config-wetter', type:'config', status:'ok', createdBy:S.me.id, createdAt:new Date().toISOString() }),
+      name:p.name, region:[p.admin1, p.country].filter(Boolean).join(', '), lat:p.latitude, lon:p.longitude });
+    W.data = null; loadWeather(true); toast(`Wetter für ${p.name} eingestellt`);
   },
 
   /* Meine Einstellungen */

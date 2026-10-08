@@ -53,6 +53,11 @@ Farben, Rollen und PINs lassen sich in der App unter **Verwaltung** ändern.
 - Abhaken nur Eltern; Vorschläge der Kinder (Gericht/Rezept) erst nach Freigabe auf der Liste.
 - Die bisherige Liste heißt jetzt „Weitere Einkäufe“.
 
+## Version 4 (08.10.2026) – Wetter
+- **Wetter-Widget** auf „Heute“: aktuelle Temperatur, Wetterlage, Uhrzeit, Höchst/Tiefst, Regenrisiko, gefühlte Temperatur, Wind und die nächsten 6 Stunden; bei „Morgen“ die Vorhersage für morgen (6–21 Uhr)
+- **Pop-up** beim Antippen: 7 Tage auswählbar, je Tag Kennzahlen (Höchst/Tiefst, Regenrisiko/-menge, Wind, Sonnenauf-/untergang, UV) und stündliche Vorhersage
+- Wohnort legt der **Admin** unter Verwaltung fest (Suche nach Ort/PLZ). Daten von Open-Meteo (kostenlos, ohne Konto), Aktualisierung alle 10–30 Min.
+
 ## Stand
 - [x] Version 1 gebaut (`index.html`), Testmodus funktioniert
 - [x] Supabase eingerichtet (Projekt drwuqnwepaaqlafsktfa, Frankfurt), Familienkonto angelegt, Registrierung gesperrt, Live-Sync getestet
