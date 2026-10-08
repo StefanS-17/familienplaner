@@ -46,6 +46,13 @@ Farben, Rollen und PINs lassen sich in der App unter **Verwaltung** ändern.
 - **Meine Einstellungen** pro Person (gilt auf allen Geräten): eigene Farbe, Hintergrundfarbe (Auswahl oder eigene), Hell/Dunkel/Automatisch
 - **Google Familienkalender anzeigen** (nur lesen): nur der **Admin** verknüpft Kalender unter Verwaltung (geheime iCal-Adresse). Name im Termintitel → Farbe dieser Person, sonst „Ganze Familie“ (abschaltbar, Standard-Zuordnung wählbar). Abruf über Supabase Edge Function `google-kalender`, Aktualisierung alle 15 Min.
 
+## Version 3 (08.10.2026) – Einkauf & Essen
+- **Rezepte** (neuer Reiter): Name + Zutaten (eine pro Zeile, Mengen wie „500 g“, „2 EL“, „1 Dose“)
+- **Essensplan**: Beim Eintragen werden passende Rezepte vorgeschlagen und deren Zutaten übernommen. Neue Gerichte mit Zutaten werden automatisch als Rezept gemerkt.
+- **Einkaufsliste „Für den Essensplan“**: rechnet die Zutaten aller Mahlzeiten der nächsten 3/7/14 Tage automatisch zusammen (gleiche Zutaten + Einzahl/Mehrzahl zusammengefasst, g/kg und ml/l umgerechnet), zeigt pro Zutat, für welches Gericht sie ist, aktualisiert sich bei jeder Änderung am Essensplan.
+- Abhaken nur Eltern; Vorschläge der Kinder (Gericht/Rezept) erst nach Freigabe auf der Liste.
+- Die bisherige Liste heißt jetzt „Weitere Einkäufe“.
+
 ## Stand
 - [x] Version 1 gebaut (`index.html`), Testmodus funktioniert
 - [x] Supabase eingerichtet (Projekt drwuqnwepaaqlafsktfa, Frankfurt), Familienkonto angelegt, Registrierung gesperrt, Live-Sync getestet

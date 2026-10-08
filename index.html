@@ -186,6 +186,10 @@ table.tt td .r{font-size:12px;color:var(--muted)}
 .slot{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px;min-height:52px;text-align:left;font-size:14px;display:flex;flex-direction:column;justify-content:center}
 .slot .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
 .slot.emptyslot{color:var(--muted);border-style:dashed}
+.slot .z{font-size:12px;color:var(--muted)}
+.ing-meals{font-size:13px;margin-top:2px;line-height:1.35}
+.recipe-card{margin:0;cursor:pointer}
+.recipe-card .ings{font-size:14px;margin-top:6px;color:var(--muted)}
 
 /* Login */
 .center{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
@@ -307,7 +311,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7
 const S = {
   items:[], me:null, screen:'loading', mode:'local', view:'heute', sub:{},
   filter:null, dayOffset:0, cal:{mode:'woche', date:todayStr(), sel:todayStr()},
-  mealWeek:todayStr(), ttKid:null, showDone:false, pinCat:'alle', pinEntry:'', loginFor:null
+  mealWeek:todayStr(), shopDays:7, ttKid:null, showDone:false, pinCat:'alle', pinEntry:'', loginFor:null
 };
 const all = t => S.items.filter(i => i.type === t);
 const find = id => S.items.find(i => i.id === id);
@@ -422,7 +426,7 @@ function refreshMe(){ if (S.me){ const m = mem(S.me.id); if (m) S.me = m; else {
 async function afterLoad(){
   if (!members().length) await Store.saveMany(seedMembers());
   let hidden = [];
-  try { const ui = JSON.parse(localStorage.getItem(LS_UI) || '{}'); hidden = ui.hidden || []; if (ui.view) S.view = ui.view; } catch {}
+  try { const ui = JSON.parse(localStorage.getItem(LS_UI) || '{}'); hidden = ui.hidden || []; if (ui.view) S.view = ui.view; if (ui.shopDays) S.shopDays = ui.shopDays; } catch {}
   S.filter = new Set(members().map(m => m.id).filter(id => !hidden.includes(id)));
   if (!S.filter.size) S.filter = new Set(members().map(m => m.id));
   if (!members().some(m => m.pinHash)) { S.screen = 'setup'; render(); return; }
@@ -431,7 +435,7 @@ async function afterLoad(){
   render();
   startGoogle();
 }
-function saveUi(){ try { localStorage.setItem(LS_UI, JSON.stringify({ hidden:members().map(m => m.id).filter(id => !S.filter.has(id)), view:S.view })); } catch {} }
+function saveUi(){ try { localStorage.setItem(LS_UI, JSON.stringify({ hidden:members().map(m => m.id).filter(id => !S.filter.has(id)), view:S.view, shopDays:S.shopDays })); } catch {} }
 
 /* ---------- Ferien, Termine, Aufgaben ---------- */
 const holidays = () => all('holiday').filter(ok).sort((a,b) => a.from.localeCompare(b.from));
@@ -781,29 +785,111 @@ function vAufgaben(){
 }
 
 /* ----- Einkauf & Essen ----- */
+/* Zutaten: „500 g Hackfleisch“ → Menge, Einheit, Name (gleiche Zutaten werden zusammengerechnet) */
+const UNIT_MAP = { g:'g', kg:'kg', mg:'mg', ml:'ml', l:'l', cl:'cl', dl:'dl', el:'EL', tl:'TL', stk:'Stk.', 'stück':'Stk.', dose:'Dose', dosen:'Dose',
+  pck:'Pck.', packung:'Pck.', packungen:'Pck.', bund:'Bund', prise:'Prise', prisen:'Prise', becher:'Becher', glas:'Glas', 'gläser':'Glas',
+  zehe:'Zehe', zehen:'Zehe', scheibe:'Scheibe', scheiben:'Scheibe', tasse:'Tasse', tassen:'Tasse', kopf:'Kopf', 'köpfe':'Kopf', beutel:'Beutel',
+  flasche:'Flasche', flaschen:'Flasche', msp:'Msp.' };
+const UNIT_PL = { Dose:'Dosen', Prise:'Prisen', Glas:'Gläser', Zehe:'Zehen', Scheibe:'Scheiben', Tasse:'Tassen', Kopf:'Köpfe', Flasche:'Flaschen' };
+const UNIT_BASE = { kg:['g',1000], mg:['g',0.001], l:['ml',1000], cl:['ml',10], dl:['ml',100] };
+const UNIT_RE = new RegExp(`^(${Object.keys(UNIT_MAP).sort((a,b) => b.length - a.length).join('|')})\\.?(?=\\s)\\s*`, 'iu');
+const FRAC = { '½':0.5, '¼':0.25, '¾':0.75 };
+function parseIng(line){
+  let s = String(line).trim().replace(/^[-•*]\s*/, '').replace(/^(\d+)\s*[-–]\s*(\d+)/, '$2');
+  if (!s) return null;
+  let qty = null, unit = '';
+  const q = s.match(/^(\d+(?:[.,]\d+)?(?:\s*\/\s*\d+)?|[½¼¾])\s*/);
+  if (q && q[0].length < s.length){
+    const t = q[1].replace(/\s/g, '');
+    qty = FRAC[t] ?? (t.includes('/') ? t.split('/')[0] / t.split('/')[1] : parseFloat(t.replace(',', '.')));
+    s = s.slice(q[0].length);
+    const u = s.match(UNIT_RE);
+    if (u){
+      unit = UNIT_MAP[u[1].toLowerCase()]; s = s.slice(u[0].length);
+      if (UNIT_BASE[unit]){ qty *= UNIT_BASE[unit][1]; unit = UNIT_BASE[unit][0]; }
+    }
+  }
+  const name = s.trim(); if (!name) return null;
+  return { qty, unit, name, key: ingKey(name) + '|' + unit };
+}
+function ingKey(name){
+  let k = name.toLowerCase().replace(/\s+/g, ' ');
+  if (/(^| )eier$/.test(k)) return k.replace(/eier$/, 'ei');
+  return k.length > 4 && /[elr]n$/.test(k) ? k.slice(0, -1) : k;
+}
+function fmtQty(q, unit){
+  if (unit === 'g' && q >= 1000){ q /= 1000; unit = 'kg'; } else if (unit === 'ml' && q >= 1000){ q /= 1000; unit = 'l'; }
+  const n = Math.round(q * 100) / 100;
+  return n.toLocaleString('de-DE') + (unit ? ' ' + (n > 1 && UNIT_PL[unit] || unit) : '');
+}
+const recipeByName = n => { const k = String(n || '').trim().toLowerCase(); return k ? all('recipe').find(r => r.name.trim().toLowerCase() === k) : null; };
+const mealRecipe = m => (m.recipeId && find(m.recipeId)) || recipeByName(m.text);
+const mealIngredients = m => { const r = mealRecipe(m); return (r ? r.ingredients : m.ingredients) || []; };
+const slotLabel = s => s === 'mittag' ? 'Mittag' : 'Abend';
+function mealShopping(from, to){
+  const meals = all('meal').filter(m => ok(m) && m.date >= from && m.date <= to).sort((a,b) => (a.date + (a.slot === 'abend' ? 1 : 0)).localeCompare(b.date + (b.slot === 'abend' ? 1 : 0)));
+  const map = new Map(), missing = [];
+  for (const m of meals){
+    const ings = mealIngredients(m);
+    if (!ings.length){ missing.push(m); continue; }
+    for (const line of ings){
+      const p = parseIng(line); if (!p) continue;
+      let r = map.get(p.key);
+      if (!r){ r = { key:p.key, name:p.name, names:new Set(), unit:p.unit, qty:0, hasQty:false, meals:[], bought:true }; map.set(p.key, r); }
+      r.names.add(p.name);
+      if (p.qty != null && !isNaN(p.qty)){ r.qty += p.qty; r.hasQty = true; }
+      if (!r.meals.includes(m)) r.meals.push(m);
+      if (!(m.bought || []).includes(p.key)) r.bought = false;
+    }
+  }
+  const rows = [...map.values()].map(r => ({ ...r, qtyLabel: r.hasQty ? fmtQty(r.qty, r.unit) : r.unit,
+      name: [...r.names].sort((a,b) => (r.hasQty && !r.unit && r.qty <= 1 ? a.length - b.length : b.length - a.length))[0] }))
+    .sort((a,b) => (a.bought - b.bought) || a.name.localeCompare(b.name, 'de'));
+  return { rows, missing };
+}
+function forMeals(ms){
+  const by = new Map(); ms.forEach(m => { const k = m.text; if (!by.has(k)) by.set(k, []); by.get(k).push(`${WD[wdIdx(parse(m.date))]} ${slotLabel(m.slot)}`); });
+  return [...by].map(([t, when]) => `${esc(t)} <span class="muted">(${when.join(', ')})</span>`).join(' · ');
+}
+const shopRange = () => [todayStr(), ymd(addDays(new Date(), (S.shopDays || 7) - 1))];
+
 function vEssen(){
   const tab = S.sub.essen || 'einkauf';
-  let h = `<div class="toolbar"><div class="seg"><button class="${tab==='einkauf'?'on':''}" onclick="A.sub('essen','einkauf')">🛒 Einkaufsliste</button><button class="${tab==='plan'?'on':''}" onclick="A.sub('essen','plan')">🍽️ Essensplan</button></div></div>`;
+  let h = `<div class="toolbar"><div class="seg"><button class="${tab==='einkauf'?'on':''}" onclick="A.sub('essen','einkauf')">🛒 Einkaufsliste</button><button class="${tab==='plan'?'on':''}" onclick="A.sub('essen','plan')">🍽️ Essensplan</button><button class="${tab==='rezepte'?'on':''}" onclick="A.sub('essen','rezepte')">📖 Rezepte</button></div></div>`;
   if (tab === 'einkauf'){
+    const [from, to] = shopRange(), { rows, missing } = mealShopping(from, to);
+    const open = rows.filter(r => !r.bought).length;
+    h += `<div class="card"><h3><span class="grow">🍽️ Für den Essensplan</span>${rows.length ? `<span class="muted small" style="font-weight:400">${open} offen</span>` : ''}</h3>
+      <div class="row wrap" style="margin-bottom:6px"><div class="seg">${[3,7,14].map(d => `<button class="${(S.shopDays||7)===d?'on':''}" onclick="A.shopDays(${d})">${d} Tage</button>`).join('')}</div><span class="muted small">heute bis ${fmtShort(to)}</span></div>
+      ${rows.length ? rows.map(r => `<div class="li ${r.bought?'done':''}"><button class="cb ${r.bought?'on':''}" ${isParent()?'':'disabled'} onclick="A.toggleIng('${encodeURIComponent(r.key).replace(/'/g,'%27')}')" aria-label="Gekauft">${r.bought?ic('tick'):''}</button>
+          <div class="lt"><div class="tt">${r.qtyLabel ? `<b>${esc(r.qtyLabel)}</b> ` : ''}${esc(r.name)}</div><div class="ing-meals">für ${forMeals(r.meals)}</div></div></div>`).join('')
+        : `<div class="empty">${missing.length ? 'Für die eingetragenen Gerichte sind noch keine Zutaten hinterlegt.' : `Im Essensplan steht bis ${fmtShort(to)} noch nichts. <a href="#" onclick="A.sub('essen','plan');return false">Essensplan öffnen</a>`}</div>`}
+      ${missing.length ? `<div class="banner warn" style="margin:12px 0 0">🧾 <span>Ohne Zutaten: ${missing.map(m => `<a href="#" onclick="A.editMeal('${m.date}','${m.slot}');return false">${esc(m.text)} (${WD[wdIdx(parse(m.date))]})</a>`).join(', ')}</span></div>` : ''}</div>`;
     const items = all('shop').sort((a,b) => (a.checked - b.checked) || a.createdAt.localeCompare(b.createdAt));
     const checked = items.filter(i => i.checked).length;
-    h += `<div class="card"><form class="quick" onsubmit="A.addShop(event)"><input id="shop-in" class="input" placeholder="Was fehlt? z. B. Milch" autocomplete="off"><button class="btn" aria-label="Hinzufügen">${ic('plus')}</button></form>
+    h += `<div class="card"><h3>🛒 Weitere Einkäufe</h3><form class="quick" onsubmit="A.addShop(event)"><input id="shop-in" class="input" placeholder="Was fehlt? z. B. Milch" autocomplete="off"><button class="btn" aria-label="Hinzufügen">${ic('plus')}</button></form>
       ${items.length ? items.map(i => `<div class="li ${i.checked?'done':''} ${i.status==='pending'?'pending':''}"><button class="cb ${i.checked?'on':''}" ${isParent()?'':'disabled'} onclick="A.toggleShop('${i.id}')">${i.checked?ic('tick'):''}</button>
         <div class="lt"><div class="tt">${esc(i.text)}</div><div class="sub">${avatar(mem(i.createdBy),'xs')}${pendTag(i)}</div></div>
         ${i.status==='pending'&&isParent()?approveBtns(i.id):''}${isParent()?`<button class="icon-btn" onclick="A.del('${i.id}')" aria-label="Löschen">${ic('trash','sm')}</button>`:''}</div>`).join('') : '<div class="empty">Die Liste ist leer.</div>'}
       ${checked && isParent() ? `<button class="btn sec sm" style="margin-top:12px" onclick="A.clearShop()">${ic('trash','sm')} Abgehakte entfernen (${checked})</button>` : ''}</div>`;
     if (!isParent()) h += `<p class="muted small">Deine Einträge erscheinen als Vorschlag, bis Mama oder Papa sie bestätigen.</p>`;
-  } else {
+  } else if (tab === 'plan'){
     const ws = weekStart(parse(S.mealWeek));
     h += `<div class="toolbar"><button class="icon-btn" onclick="A.mealNav(-1)">${ic('left')}</button><b>${fmtShort(ymd(ws))} – ${fmtShort(ymd(addDays(ws,6)))}</b><button class="icon-btn" onclick="A.mealNav(1)">${ic('right')}</button><button class="btn sec sm" onclick="A.mealNav(0)">Diese Woche</button></div><div class="card">`;
     for (let i = 0; i < 7; i++){
       const ds = ymd(addDays(ws, i));
       h += `<div class="meal-row"><div class="d ${ds===todayStr()?'today':''}">${WD[i]}<span class="muted small" style="font-weight:400">${parse(ds).getDate()}.${parse(ds).getMonth()+1}.</span></div>${['mittag','abend'].map(s => {
-        const m = find(`meal-${ds}-${s}`);
-        return `<button class="slot ${m?'':'emptyslot'} ${m?.status==='pending'?'pending':''}" onclick="A.editMeal('${ds}','${s}')"><span class="k">${s==='mittag'?'Mittag':'Abend'}</span>${m ? esc(m.text) + (m.status==='pending' ? ' <span class="tag pend">Vorschlag</span>' : '') : '+'}</button>`;
+        const m = find(`meal-${ds}-${s}`), n = m ? mealIngredients(m).length : 0;
+        return `<button class="slot ${m?'':'emptyslot'} ${m?.status==='pending'?'pending':''}" onclick="A.editMeal('${ds}','${s}')"><span class="k">${slotLabel(s)}</span>${m ? esc(m.text) + (m.status==='pending' ? ' <span class="tag pend">Vorschlag</span>' : '') + `<span class="z">${n ? `🧾 ${n} Zutaten` : 'keine Zutaten'}</span>` : '+'}</button>`;
       }).join('')}</div>`;
     }
-    h += `</div>`;
+    h += `</div><p class="muted small">Die Zutaten der eingetragenen Gerichte erscheinen automatisch auf der Einkaufsliste.</p>`;
+  } else {
+    const rs = all('recipe').sort((a,b) => a.name.localeCompare(b.name, 'de'));
+    h += `<div class="toolbar"><button class="btn" onclick="A.editRecipe()">${ic('plus','sm')} Rezept</button><span class="muted small">Zutaten einmal hinterlegen – im Essensplan reicht dann der Name.</span></div>`;
+    h += rs.length ? `<div class="grid two">${rs.map(r => `<div class="card recipe-card ${r.status==='pending'?'pending':''}" onclick="A.editRecipe('${r.id}')"><h3><span class="grow">${esc(r.name)}</span>${pendTag(r)}</h3>
+        <div class="small muted">${(r.ingredients||[]).length} Zutaten</div><div class="ings">${esc((r.ingredients||[]).slice(0,8).join(' · '))}${(r.ingredients||[]).length > 8 ? ' …' : ''}</div></div>`).join('')}</div>`
+      : `<div class="card"><div class="empty">Noch keine Rezepte. Rezepte entstehen auch automatisch, wenn du im Essensplan ein neues Gericht mit Zutaten einträgst.</div></div>`;
   }
   return h;
 }
@@ -854,13 +940,14 @@ function vPinnwand(){
 }
 
 /* ----- Freigaben ----- */
-const TYPE_L = { event:'📅 Termin', task:'✅ Aufgabe', shop:'🛒 Einkauf', meal:'🍽️ Essen', note:'📌 Pinnwand', holiday:'🏖️ Ferien' };
+const TYPE_L = { event:'📅 Termin', task:'✅ Aufgabe', shop:'🛒 Einkauf', meal:'🍽️ Essen', note:'📌 Pinnwand', holiday:'🏖️ Ferien', recipe:'📖 Rezept' };
 function summary(i){
   if (i.type === 'event') return `${esc(i.title)} <span class="muted small">· ${fmtShort(i.date)} ${timeLabel(i)}${i.repeat==='weekly'?' · wöchentlich':''}</span>`;
   if (i.type === 'task') return `${esc(i.title)} <span class="muted small">· ${esc(mem(i.person)?.name||'Alle')} · ${REPEAT[i.repeat||'none']}</span>`;
   if (i.type === 'shop') return esc(i.text);
   if (i.type === 'meal') return `${esc(i.text)} <span class="muted small">· ${fmtShort(i.date)} ${i.slot==='mittag'?'Mittag':'Abend'}</span>`;
   if (i.type === 'note') return `<b>${esc(i.title)}</b>${i.text?`<div class="small muted">${esc(i.text.slice(0,140))}</div>`:''}`;
+  if (i.type === 'recipe') return `${esc(i.name)} <span class="muted small">· ${(i.ingredients||[]).length} Zutaten</span>`;
   if (i.type === 'holiday') return `${esc(i.name)} <span class="muted small">· ${fmtDate(i.from)} – ${fmtDate(i.to)}</span>`;
   return esc(i.id);
 }
@@ -1088,12 +1175,77 @@ const A = {
   toggleShop(id){ if (!isParent()) return; const i = find(id); Store.save({ ...i, checked: !i.checked }); },
   clearShop(){ const ids = all('shop').filter(i => i.checked).map(i => i.id); confirmBox(`${ids.length} abgehakte Einträge entfernen?`, async () => { for (const id of ids) await Store.remove(id); }, 'Entfernen'); },
   mealNav(n){ S.mealWeek = n === 0 ? todayStr() : ymd(addDays(parse(S.mealWeek), 7*n)); render(); },
+  shopDays(d){ S.shopDays = d; saveUi(); render(); },
+  toggleIng(k){
+    if (!isParent()) return;
+    k = decodeURIComponent(k);
+    const [from, to] = shopRange(), row = mealShopping(from, to).rows.find(r => r.key === k); if (!row) return;
+    const now = new Date().toISOString();
+    Store.saveMany(row.meals.map(m => { const b = new Set(m.bought || []); row.bought ? b.delete(k) : b.add(k); return { ...m, bought:[...b], updatedAt:now }; }));
+    render();
+  },
   editMeal(ds, slot){
     const id = `meal-${ds}-${slot}`, m = find(id);
     if (!isParent() && m){ toast('Nur Eltern können den Essensplan ändern'); return; }
-    openForm({ title: `${slot==='mittag'?'Mittagessen':'Abendessen'} · ${fmtShort(ds)}`, fields:[{ k:'text', label: isParent() ? 'Was gibt es?' : 'Was wünschst du dir?', ph:'z. B. Spaghetti Bolognese' }], values: m || {},
-      onSave: v => { if (!v.text){ if (m) Store.remove(id); return; } Store.save(m ? { ...m, text:v.text } : { ...make('meal', { date:ds, slot, text:v.text }), id }); },
-      extra: m && isParent() ? `<p class="muted small">Feld leeren und speichern, um den Eintrag zu entfernen.</p>` : '' });
+    const recipes = all('recipe').sort((a,b) => a.name.localeCompare(b.name, 'de'));
+    const own = m && !mealRecipe(m) ? (m.ingredients || []) : [];
+    openModal(`<h2>${slot==='mittag'?'Mittagessen':'Abendessen'} · ${fmtShort(ds)}</h2><form onsubmit="A.saveMeal(event,'${ds}','${slot}')">
+      <div class="field"><label for="m-text">${isParent() ? 'Was gibt es?' : 'Was wünschst du dir?'}</label><input class="input" id="m-text" list="m-recipes" value="${esc(m?.text || '')}" placeholder="z. B. Spaghetti Bolognese" autocomplete="off" oninput="A.mealInput()">
+        <datalist id="m-recipes">${recipes.map(r => `<option value="${esc(r.name)}"></option>`).join('')}</datalist></div>
+      <div class="field"><label for="m-ing">Zutaten <span style="font-weight:400">– eine pro Zeile</span></label><textarea class="input" id="m-ing" rows="7" placeholder="500 g Hackfleisch&#10;1 Dose Tomaten&#10;2 Zwiebeln">${esc(own.join('\n'))}</textarea><div id="m-hint" class="muted small" style="margin-top:4px"></div></div>
+      <label class="check" id="m-save-wrap"><input type="checkbox" id="m-save" checked> Als Rezept merken – beim nächsten Mal reicht der Name</label>
+      <div class="actions"><button type="button" class="btn sec" onclick="A.close()">Abbrechen</button><button class="btn">Speichern</button></div>
+      ${m && isParent() ? `<button type="button" class="btn danger" style="width:100%;margin-top:10px" onclick="A.close();A.del('${id}')">${ic('trash','sm')} Eintrag entfernen</button>` : ''}</form>`);
+    A.mealInput();
+    setTimeout(() => document.getElementById('m-text')?.focus(), 50);
+  },
+  mealInput(){
+    const r = recipeByName(document.getElementById('m-text').value), ta = document.getElementById('m-ing');
+    const hint = document.getElementById('m-hint'), wrap = document.getElementById('m-save-wrap');
+    if (r){
+      if (ta.dataset.from !== r.id){ ta.value = (r.ingredients || []).join('\n'); ta.dataset.from = r.id; }
+      hint.textContent = `Zutaten aus dem Rezept „${r.name}“.` + (isParent() ? ' Änderungen hier werden auch im Rezept gespeichert.' : '');
+      wrap.style.display = 'none'; ta.readOnly = !isParent();
+    } else {
+      if (ta.dataset.from){ ta.value = ''; delete ta.dataset.from; }
+      hint.textContent = ''; wrap.style.display = ''; ta.readOnly = false;
+    }
+  },
+  saveMeal(e, ds, slot){
+    e.preventDefault();
+    const id = `meal-${ds}-${slot}`, m = find(id);
+    let text = document.getElementById('m-text').value.trim();
+    const lines = document.getElementById('m-ing').value.split('\n').map(x => x.trim()).filter(Boolean);
+    const keep = document.getElementById('m-save').checked;
+    closeModal();
+    if (!text){ if (m && isParent()) Store.remove(id); return; }
+    let r = recipeByName(text), own = [];
+    if (r) text = r.name;
+    if (r){ if (isParent() && lines.join('\n') !== (r.ingredients || []).join('\n')) Store.save({ ...r, ingredients:lines }); }
+    else if (lines.length && keep){ r = make('recipe', { name:text, ingredients:lines, note:'' }); Store.save(r); }
+    else own = lines;
+    const base = m ? { ...m } : { ...make('meal', { date:ds, slot }), id };
+    Store.save(Object.assign(base, { text, recipeId: r?.id || null, ingredients: own }));
+    toast(isParent() || m ? 'Gespeichert' : 'Als Vorschlag gespeichert – wartet auf Freigabe');
+  },
+  editRecipe(id){
+    const r = id ? find(id) : null;
+    if (r && !isParent()){
+      openModal(`<h2>${esc(r.name)}</h2><div class="sec-t">Zutaten</div>${(r.ingredients||[]).map(x => `<div style="padding:4px 0;border-bottom:1px solid var(--line)">${esc(x)}</div>`).join('')}${r.note ? `<div class="sec-t">Notiz</div><div style="white-space:pre-wrap">${esc(r.note)}</div>` : ''}<div class="actions"><button class="btn sec" onclick="A.close()">Schließen</button></div>`);
+      return;
+    }
+    openForm({ title: r ? 'Rezept bearbeiten' : 'Neues Rezept', fields:[
+      { k:'name', label:'Name des Gerichts', required:true, ph:'z. B. Spaghetti Bolognese' },
+      { k:'ingredients', label:'Zutaten – eine pro Zeile', type:'textarea', ph:'500 g Hackfleisch\n1 Dose Tomaten\n2 Zwiebeln\n1 Pck. Spaghetti', hint:'Mengen am Anfang (z. B. „500 g“, „2 EL“, „1 Dose“) werden auf der Einkaufsliste zusammengerechnet.' },
+      { k:'note', label:'Notiz oder Link zum Rezept', type:'textarea' }],
+      values: r ? { ...r, ingredients:(r.ingredients || []).join('\n') } : {},
+      onSave: v => {
+        const other = recipeByName(v.name); if (other && other.id !== r?.id){ toast(`Ein Rezept „${other.name}“ gibt es schon`, true); return; }
+        const data = { name:v.name, ingredients:v.ingredients.split('\n').map(x => x.trim()).filter(Boolean), note:v.note };
+        Store.save(r ? { ...r, ...data } : make('recipe', data));
+        toast(isParent() || r ? 'Gespeichert' : 'Als Vorschlag gespeichert');
+      },
+      extra: r && isParent() ? `<button type="button" class="btn danger" style="width:100%;margin-top:10px" onclick="A.close();A.del('${r.id}')">${ic('trash','sm')} Rezept löschen</button>` : '' });
   },
 
   /* Schule */
