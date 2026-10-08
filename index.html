@@ -71,6 +71,11 @@ svg.i.sm{width:18px;height:18px}
 .chip.plain{padding:6px 14px}
 .chip.on{border-color:var(--c,var(--accent));background:color-mix(in srgb,var(--c,var(--accent)) 14%,var(--card));font-weight:600}
 .chip.off{opacity:.45}
+.pfilter{gap:6px;padding:0 0 8px}
+.pfilter .chip{padding:2px 10px 2px 2px;font-size:13px;gap:5px}
+.pfilter .chip.plain{padding:3px 10px}
+.pfilter .av{width:22px;height:22px;font-size:11px}
+@media (max-width:599px){.pfilter .chip{padding:2px}.pfilter .chip.plain{padding:3px 10px}.pfilter .nm{display:none}.pfilter .av{width:26px;height:26px;font-size:12px}}
 .av{width:28px;height:28px;border-radius:50%;background:var(--c);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none}
 .av.lg{width:72px;height:72px;font-size:30px}
 .av.xs{width:20px;height:20px;font-size:10px}
@@ -241,13 +246,22 @@ textarea.input{min-height:90px;resize:vertical}
 .wx-ic{font-size:52px;line-height:1}
 .wx-t{font-size:42px;font-weight:700;line-height:1;letter-spacing:-.02em}
 .wx-l{font-size:15px;color:var(--muted);margin-top:2px}
-.wx-side{margin-left:auto;text-align:right;font-size:14px;line-height:1.5}
-@media (max-width:480px){.wx-side{margin-left:0;text-align:left;width:100%}}
-.wx-hours{display:flex;gap:6px;margin-top:12px;overflow-x:auto;scrollbar-width:none}
+.wx{padding:10px 14px}
+.wx .wx-row{display:flex;align-items:center;gap:10px;min-width:0}
+.wx .wx-ic{font-size:32px}
+.wx .wx-t{font-size:28px}
+.wx .wx-mid{min-width:0;flex:1;line-height:1.3}
+.wx .wx-mid .lbl{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wx .wx-mid .sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wx .wx-side{text-align:right;font-size:12px;line-height:1.35;color:var(--muted);white-space:nowrap}
+.wx .wx-side b{color:var(--text);font-size:13px}
+@media (max-width:480px){.wx .wind,.wx .loc{display:none}}
+.wx .wx-go{color:var(--accent);font-size:22px;line-height:1;padding-left:2px}
+.wx-hours{display:flex;gap:4px;margin-top:8px;overflow-x:auto;scrollbar-width:none}
 .wx-hours::-webkit-scrollbar{display:none}
-.wx-hours .h{flex:1 0 54px;text-align:center;background:color-mix(in srgb,var(--card) 75%,transparent);border:1px solid var(--line);border-radius:12px;padding:6px 2px;font-size:13px}
-.wx-hours .h .e{font-size:20px;line-height:1.4}
-.wx-more{font-size:13px;color:var(--accent);font-weight:600;margin-top:8px;text-align:right}
+.wx-hours .h{flex:1 0 auto;display:flex;align-items:center;justify-content:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:12px;background:color-mix(in srgb,var(--card) 70%,transparent);border:1px solid var(--line);white-space:nowrap}
+.wx-hours .h .e{font-size:14px}
+.wx-hours .h .rain{font-size:11px}
 .wx-strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px}
 .wx-h{flex:0 0 64px;text-align:center;border:1px solid var(--line);border-radius:12px;padding:8px 4px;background:var(--card2);font-size:14px}
 .wx-h .e{font-size:24px;line-height:1.4}
@@ -717,22 +731,19 @@ function weatherWidget(ds){
   const d = wxData();
   if (!d) return `<div class="card wx" style="cursor:default"><span class="muted">${W.error ? '⚠️ ' + esc(W.error) : '🌤️ Wetter wird geladen…'}</span></div>`;
   const di = d.daily.time.indexOf(ds); if (di < 0) return '';
-  const dl = d.daily, hr = d.hourly;
-  const hourCell = k => `<div class="h"><div class="muted">${hr.time[k].slice(11,13)} Uhr</div><div class="e">${wxIcon(hr.weather_code[k], hr.is_day[k])}</div><b>${deg(hr.temperature_2m[k])}</b>${hr.precipitation_probability[k] >= 20 ? `<div class="rain">💧${hr.precipitation_probability[k]}%</div>` : ''}</div>`;
-  const side = `<div class="small">↑ ${deg(dl.temperature_2m_max[di])} ↓ ${deg(dl.temperature_2m_min[di])} · 💧 ${dl.precipitation_probability_max[di] ?? 0}%</div>`;
-  if (di === 0){
-    const c = d.current, start = hr.time.findIndex(t => t.slice(0,13) > c.time.slice(0,13));
-    const hours = start < 0 ? [] : [0,1,2,3,4,5].map(n => start + n).filter(k => k < hr.time.length);
-    return `<button class="card wx ${c.is_day ? '' : 'night'}" onclick="A.weather(0)" aria-label="Wettervorhersage öffnen">
-      <div class="wx-main"><span class="wx-ic">${wxIcon(c.weather_code, c.is_day)}</span><div><div class="wx-t">${deg(c.temperature_2m)}</div><div class="wx-l">${wxLabel(c.weather_code)}</div></div>
-        <div class="wx-side"><div><b>📍 ${esc(loc.name)}</b></div><div class="muted">Jetzt · <span id="wx-time">${hhmm()}</span> Uhr</div>${side}<div class="muted small">gefühlt ${deg(c.apparent_temperature)} · Wind ${Math.round(c.wind_speed_10m)} km/h</div></div></div>
-      <div class="wx-hours">${hours.map(hourCell).join('')}</div><div class="wx-more">Vorhersage für die Woche ›</div></button>`;
-  }
-  const hours = [6,9,12,15,18,21].map(h => hr.time.indexOf(`${ds}T${pad2(h)}:00`)).filter(k => k >= 0);
-  return `<button class="card wx" onclick="A.weather(${di})" aria-label="Wettervorhersage öffnen">
-    <div class="wx-main"><span class="wx-ic">${wxIcon(dl.weather_code[di])}</span><div><div class="wx-t">${deg(dl.temperature_2m_max[di])}</div><div class="wx-l">${wxLabel(dl.weather_code[di])}</div></div>
-      <div class="wx-side"><div><b>📍 ${esc(loc.name)}</b></div><div class="muted">${fmtLong(ds)}</div>${side}</div></div>
-    <div class="wx-hours">${hours.map(hourCell).join('')}</div><div class="wx-more">Vorhersage für die Woche ›</div></button>`;
+  const dl = d.daily, hr = d.hourly, today = di === 0, c = d.current;
+  const pp = k => hr.precipitation_probability[k] ?? 0;
+  const hourCell = k => `<div class="h"><span class="muted">${hr.time[k].slice(11,13)}</span><span class="e">${wxIcon(hr.weather_code[k], hr.is_day[k])}</span><b>${deg(hr.temperature_2m[k])}</b>${pp(k) >= 20 ? `<span class="rain">${pp(k)}%</span>` : ''}</div>`;
+  let hours;
+  if (today){ const st = hr.time.findIndex(t => t.slice(0,13) > c.time.slice(0,13)); hours = st < 0 ? [] : [0,1,2,3,4,5].map(n => st + n).filter(k => k < hr.time.length); }
+  else hours = [6,9,12,15,18,21].map(h => hr.time.indexOf(`${ds}T${pad2(h)}:00`)).filter(k => k >= 0);
+  const code = today ? c.weather_code : dl.weather_code[di];
+  return `<button class="card wx ${today && !c.is_day ? 'night' : ''}" onclick="A.weather(${di})" aria-label="Wettervorhersage öffnen">
+    <div class="wx-row"><span class="wx-ic">${today ? wxIcon(c.weather_code, c.is_day) : wxIcon(code)}</span><span class="wx-t">${deg(today ? c.temperature_2m : dl.temperature_2m_max[di])}</span>
+      <div class="wx-mid"><div class="lbl">${wxLabel(code)}</div><div class="sub">${today ? `<span id="wx-time">${hhmm()}</span> Uhr` : `${WD[wdIdx(parse(ds))]} ${parse(ds).getDate()}.${parse(ds).getMonth()+1}.`}<span class="loc"> · 📍 ${esc(loc.name)}</span></div></div>
+      <div class="wx-side"><b>↑ ${deg(dl.temperature_2m_max[di])} ↓ ${deg(dl.temperature_2m_min[di])}</b><br>💧 ${dl.precipitation_probability_max[di] ?? 0}%<span class="wind"> · 💨 ${Math.round(today ? c.wind_speed_10m : dl.wind_speed_10m_max[di])} km/h</span></div>
+      <span class="wx-go">›</span></div>
+    ${hours.length ? `<div class="wx-hours">${hours.map(hourCell).join('')}</div>` : ''}</button>`;
 }
 
 /* ---------- Render ---------- */
@@ -790,8 +801,8 @@ function renderShell(){
 }
 function renderFilter(){
   const ms = members(), allOn = ms.every(m => S.filter.has(m.id));
-  return `<div class="chips"><button class="chip plain ${allOn?'on':''}" onclick="A.filterAll()">Alle</button>${ms.map(m =>
-    `<button class="chip ${S.filter.has(m.id)?'on':'off'}" style="--c:${m.color}" onclick="A.filter('${m.id}')">${avatar(m)}${esc(m.name)}</button>`).join('')}</div>`;
+  return `<div class="chips pfilter"><button class="chip plain ${allOn?'on':''}" onclick="A.filterAll()">Alle</button>${ms.map(m =>
+    `<button class="chip ${S.filter.has(m.id)?'on':'off'}" style="--c:${m.color}" onclick="A.filter('${m.id}')" title="${esc(m.name)}" aria-label="${esc(m.name)}">${avatar(m)}<span class="nm">${esc(m.name)}</span></button>`).join('')}</div>`;
 }
 
 /* ----- Heute ----- */
@@ -805,8 +816,6 @@ function vHeute(){
   let h = `<div class="toolbar"><div class="seg"><button class="${S.dayOffset===0?'on':''}" onclick="A.day(0)">Heute</button><button class="${S.dayOffset===1?'on':''}" onclick="A.day(1)">Morgen</button></div><span class="muted small">${fmtLong(ds)}</span></div>`;
   if (hol) h += `<div class="banner warn">🏖️ <span><b>${esc(hol.name)}</b> bis ${fmtShort(hol.to)} – kein Stundenplan</span></div>`;
   h += weatherWidget(ds);
-  if (pc) h += `<div class="banner warn" style="cursor:pointer" onclick="A.go('freigaben')">🔔 <span><b>${pc} ${pc===1?'Vorschlag wartet':'Vorschläge warten'}</b> auf deine Freigabe</span></div>`;
-  if (meals.length) h += `<div class="card"><h3>🍽️ Essen</h3>${meals.map(m => `<div class="row" style="padding:3px 0"><span class="muted small" style="width:60px">${m.slot==='mittag'?'Mittag':'Abend'}</span><span>${esc(m.text)}</span>${pendTag(m)}</div>`).join('')}</div>`;
   const famEv = occ.filter(o => !o.e.persons || !o.e.persons.length);
   h += `<div class="grid two">`;
   for (const m of members().filter(m => S.filter.has(m.id))){
@@ -821,7 +830,11 @@ function vHeute(){
   }
   h += `</div>`;
   if (famEv.length) h += `<div class="card"><h3>👪 Ganze Familie</h3>${famEv.map(o => evRow(o)).join('')}</div>`;
-  if (pinned.length) h += `<div class="card" style="margin-top:14px"><h3>📌 Angepinnt</h3>${pinned.map(n => `<div style="padding:4px 0;cursor:pointer" onclick="A.go('pinnwand')"><b>${esc(n.title)}</b> <span class="muted small">· ${esc(mem(n.createdBy)?.name||'')}</span></div>`).join('')}</div>`;
+  // Alles weitere (Freigaben, Essen, Pinnwand …) steht unter den Personen
+  h += `<div style="margin-top:14px"></div>`;
+  if (pc) h += `<div class="banner warn" style="cursor:pointer" onclick="A.go('freigaben')">🔔 <span><b>${pc} ${pc===1?'Vorschlag wartet':'Vorschläge warten'}</b> auf deine Freigabe</span></div>`;
+  if (meals.length) h += `<div class="card"><h3>🍽️ Essen</h3>${meals.map(m => `<div class="row" style="padding:3px 0"><span class="muted small" style="width:60px">${m.slot==='mittag'?'Mittag':'Abend'}</span><span>${esc(m.text)}</span>${pendTag(m)}</div>`).join('')}</div>`;
+  if (pinned.length) h += `<div class="card"><h3>📌 Angepinnt</h3>${pinned.map(n => `<div style="padding:4px 0;cursor:pointer" onclick="A.go('pinnwand')"><b>${esc(n.title)}</b> <span class="muted small">· ${esc(mem(n.createdBy)?.name||'')}</span></div>`).join('')}</div>`;
   return h;
 }
 
@@ -1390,7 +1403,7 @@ const A = {
       <div class="chips" style="margin-top:12px">${dl.time.map((x, k) => `<button class="chip plain ${k === i ? 'on' : ''}" onclick="A.weather(${k})">${dayName(k)} ${wxIcon(dl.weather_code[k])} ${deg(dl.temperature_2m_max[k])}</button>`).join('')}</div>
       <div class="wx-head"><span class="wx-ic">${i === 0 ? wxIcon(d.current.weather_code, d.current.is_day) : wxIcon(dl.weather_code[i])}</span><div>
         <div class="wx-t">${i === 0 ? deg(d.current.temperature_2m) : deg(dl.temperature_2m_max[i])}</div>
-        <div class="wx-l">${fmtLong(ds)} · ${wxLabel(i === 0 ? d.current.weather_code : dl.weather_code[i])}</div></div></div>
+        <div class="wx-l">${fmtLong(ds)} · ${wxLabel(i === 0 ? d.current.weather_code : dl.weather_code[i])}${i === 0 ? ` · gefühlt ${deg(d.current.apparent_temperature)}` : ''}</div></div></div>
       <div class="wx-stats">${stat('Höchst / Tiefst', `${deg(dl.temperature_2m_max[i])} / ${deg(dl.temperature_2m_min[i])}`)}${stat('Regenrisiko', (dl.precipitation_probability_max[i] ?? 0) + ' %')}${stat('Regenmenge', String(dl.precipitation_sum[i] ?? 0).replace('.', ',') + ' mm')}${stat('Wind bis', Math.round(dl.wind_speed_10m_max[i]) + ' km/h')}${stat('Sonne', `🌅 ${dl.sunrise[i].slice(11)} · 🌇 ${dl.sunset[i].slice(11)}`)}${stat('UV-Index', Math.round(dl.uv_index_max[i] ?? 0))}</div>
       <div class="sec-t">${i === 0 ? 'Die nächsten Stunden' : 'Stündlich'}</div>
       <div class="wx-strip">${hours.map((k, n) => `<div class="wx-h ${i === 0 && n === 0 ? 'now' : ''}"><div class="muted small">${i === 0 && n === 0 ? 'Jetzt' : hr.time[k].slice(11,16)}</div><div class="e">${wxIcon(hr.weather_code[k], hr.is_day[k])}</div><b>${deg(hr.temperature_2m[k])}</b><div class="rain">💧${hr.precipitation_probability[k] ?? 0}%</div><div class="rainbar"><i style="width:${hr.precipitation_probability[k] ?? 0}%"></i></div></div>`).join('')}</div>
