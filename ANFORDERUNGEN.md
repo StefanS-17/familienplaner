@@ -77,6 +77,10 @@ Geplant per /grill-me, Entscheidungen:
 - Anzeige: ⭐ im Kopf der Personenkarte, Familienziel-Karte unter den Personen, neuer Bereich **⭐ Belohnungen** (Seitenleiste / „Mehr“).
 - Später separat planen: Wissens-Quiz, Serien & Abzeichen.
 
+## Version 6.1 (09.10.2026)
+- Personenkarten auf Tablets (ab 560 px) immer zwei pro Zeile
+- **Aufgaben & Pinnwand** zu einem Bereich zusammengefasst (zwei Reiter ✅ Aufgaben / 📌 Pinnwand); „+“ legt je nach Reiter Aufgabe oder Pinnwand-Eintrag an; auf dem Handy über „Aufgaben“ in der unteren Leiste erreichbar
+
 ## Stand
 - [x] Version 1 gebaut (`index.html`), Testmodus funktioniert
 - [x] Supabase eingerichtet (Projekt drwuqnwepaaqlafsktfa, Frankfurt), Familienkonto angelegt, Registrierung gesperrt, Live-Sync getestet

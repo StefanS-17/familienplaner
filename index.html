@@ -875,10 +875,9 @@ function weatherWidget(ds){
 const NAV = [
   { id:'heute', label:'Heute', icon:'home' },
   { id:'kalender', label:'Kalender', icon:'cal' },
-  { id:'aufgaben', label:'Aufgaben', icon:'check' },
+  { id:'aufgaben', label:'Aufgaben & Pinnwand', short:'Aufgaben', icon:'check' },
   { id:'essen', label:'Einkauf & Essen', short:'Einkauf', icon:'cart' },
   { id:'schule', label:'Schule & Sport', short:'Schule', icon:'book' },
-  { id:'pinnwand', label:'Pinnwand', icon:'note' },
   { id:'belohnungen', label:'Belohnungen', icon:'star' },
   { id:'freigaben', label:'Freigaben', icon:'bell', parent:true },
   { id:'verwaltung', label:'Verwaltung', icon:'gear', admin:true }
@@ -901,17 +900,18 @@ function render(){
 }
 
 function renderShell(){
+  if (S.view === 'pinnwand'){ S.view = 'aufgaben'; S.sub.aufgaben = 'pinnwand'; }
   if (!navItems().some(n => n.id === S.view) && S.view !== 'mehr') S.view = 'heute';
   const pc = isParent() ? pendingCount() : 0;
   const cur = NAV.find(n => n.id === S.view) || NAV[0];
   const views = { heute:vHeute, kalender:vKalender, aufgaben:vAufgaben, essen:vEssen, schule:vSchule, pinnwand:vPinnwand, belohnungen:vBelohnungen, freigaben:vFreigaben, verwaltung:vVerwaltung };
-  const showFilter = ['heute','kalender','aufgaben'].includes(S.view);
+  const showFilter = ['heute','kalender'].includes(S.view) || (S.view === 'aufgaben' && S.sub.aufgaben !== 'pinnwand');
   const side = navItems().map(n => `<button class="${S.view===n.id?'on':''}" onclick="A.go('${n.id}')">${ic(n.icon)}<span>${n.label}</span>${n.id==='freigaben'&&pc?`<span class="badge">${pc}</span>`:''}</button>`).join('');
   const bottomIds = ['heute','kalender','aufgaben','essen','schule'];
   const moreOn = !bottomIds.includes(S.view);
   const bottom = bottomIds.map(id => { const n = NAV.find(x => x.id === id); return `<button class="${S.view===id?'on':''}" onclick="A.go('${id}')">${ic(n.icon)}<span>${n.short||n.label}</span></button>`; }).join('')
     + `<button class="${moreOn?'on':''}" onclick="A.more()">${ic('more')}<span>Mehr</span>${pc?`<span class="badge">${pc}</span>`:''}</button>`;
-  const fab = { kalender:'A.newEvent()', aufgaben:'A.newTask()', pinnwand:'A.newNote()', heute:'A.quickAdd()' }[S.view];
+  const fab = { kalender:'A.newEvent()', aufgaben: S.sub.aufgaben === 'pinnwand' ? 'A.newNote()' : 'A.newTask()', heute:'A.quickAdd()' }[S.view];
   return `<div class="shell">
     <nav class="side"><div class="logo"><span style="color:var(--accent)">${ic('logo')}</span>Familienplaner</div>${side}
       <div class="spacer"></div><button onclick="A.settings()">${ic('brush')}<span>Meine Einstellungen</span></button><button onclick="A.logout()">${ic('swap')}<span>Person wechseln</span></button></nav>
@@ -964,7 +964,7 @@ function vHeute(){
   h += `<div style="margin-top:14px"></div>`;
   if (pc) h += `<div class="banner warn" style="cursor:pointer" onclick="A.go('freigaben')">🔔 <span><b>${pc} ${pc===1?'Vorschlag wartet':'Vorschläge warten'}</b> auf deine Freigabe</span></div>`;
   if (meals.length) h += `<div class="card"><h3>🍽️ Essen</h3>${meals.map(m => `<div class="row" style="padding:3px 0"><span class="muted small" style="width:60px">${m.slot==='mittag'?'Mittag':'Abend'}</span><span>${esc(m.text)}</span>${pendTag(m)}</div>`).join('')}</div>`;
-  if (pinned.length) h += `<div class="card"><h3>📌 Angepinnt</h3>${pinned.map(n => `<div style="padding:4px 0;cursor:pointer" onclick="A.go('pinnwand')"><b>${esc(n.title)}</b> <span class="muted small">· ${esc(mem(n.createdBy)?.name||'')}</span></div>`).join('')}</div>`;
+  if (pinned.length) h += `<div class="card"><h3>📌 Angepinnt</h3>${pinned.map(n => `<div style="padding:4px 0;cursor:pointer" onclick="A.openPinnwand()"><b>${esc(n.title)}</b> <span class="muted small">· ${esc(mem(n.createdBy)?.name||'')}</span></div>`).join('')}</div>`;
   return h;
 }
 
@@ -1005,11 +1005,14 @@ function vKalender(){
 
 /* ----- Aufgaben ----- */
 function vAufgaben(){
+  const tab = S.sub.aufgaben || 'liste';
+  const tabs = `<div class="toolbar"><div class="seg"><button class="${tab==='liste'?'on':''}" onclick="A.sub('aufgaben','liste')">✅ Aufgaben</button><button class="${tab==='pinnwand'?'on':''}" onclick="A.sub('aufgaben','pinnwand')">📌 Pinnwand</button></div></div>`;
+  if (tab === 'pinnwand') return tabs + vPinnwand();
   const vis = t => !t.person || S.filter.has(t.person);
   const rec = all('task').filter(t => t.repeat && t.repeat !== 'none' && vis(t)).sort((a,b) => (a.person||'').localeCompare(b.person||'') || a.title.localeCompare(b.title));
   const once = all('task').filter(t => (!t.repeat || t.repeat === 'none') && vis(t)).sort((a,b) => (a.done - b.done) || (a.due||'9999').localeCompare(b.due||'9999'));
   const openOnce = once.filter(t => !t.done), doneOnce = once.filter(t => t.done);
-  let h = `<div class="toolbar"><button class="btn" onclick="A.newTask()">${ic('plus','sm')} Aufgabe</button><button class="btn sec" onclick="A.newTask(true)">${ic('plus','sm')} Ämtli</button></div>`;
+  let h = tabs + `<div class="toolbar"><button class="btn" onclick="A.newTask()">${ic('plus','sm')} Aufgabe</button><button class="btn sec" onclick="A.newTask(true)">${ic('plus','sm')} Ämtli</button></div>`;
   h += `<div class="grid two"><div class="card"><h3>📋 Aufgaben <span class="muted small" style="font-weight:400">${openOnce.length} offen</span></h3>${openOnce.length ? openOnce.map(t => taskRow(t)).join('') : '<div class="empty">Alles erledigt 🎉</div>'}
     ${doneOnce.length ? `<button class="btn sec sm" style="margin-top:10px" onclick="A.toggleShowDone()">${S.showDone?'Erledigte ausblenden':`Erledigte anzeigen (${doneOnce.length})`}</button>${S.showDone ? doneOnce.map(t => taskRow(t)).join('') : ''}` : ''}</div>
     <div class="card"><h3>🔁 Ämtli <span class="muted small" style="font-weight:400">wiederkehrend</span></h3>${rec.length ? rec.map(t => taskRow(t)).join('') : '<div class="empty">Noch keine Ämtli. Z. B. „Spülmaschine ausräumen“ – täglich.</div>'}</div></div>`;
@@ -1347,6 +1350,7 @@ const A = {
   yes(){ const f = FORM.onYes; closeModal(); f(); },
   submitForm(e){ e.preventDefault(); const v = readForm(); if (!v) return; const f = FORM.onSave; closeModal(); f(v); },
   sub(view, tab){ S.sub[view] = tab; render(); },
+  openPinnwand(){ S.sub.aufgaben = 'pinnwand'; A.go('aufgaben'); },
   day(n){ S.dayOffset = n; render(); },
   filter(id){ S.filter.has(id) ? S.filter.delete(id) : S.filter.add(id); if (!S.filter.size) members().forEach(m => S.filter.add(m.id)); saveUi(); render(); },
   filterAll(){ members().forEach(m => S.filter.add(m.id)); saveUi(); render(); },
