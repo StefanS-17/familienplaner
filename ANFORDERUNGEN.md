@@ -58,6 +58,13 @@ Farben, Rollen und PINs lassen sich in der App unter **Verwaltung** ändern.
 - **Pop-up** beim Antippen: 7 Tage auswählbar, je Tag Kennzahlen (Höchst/Tiefst, Regenrisiko/-menge, Wind, Sonnenauf-/untergang, UV) und stündliche Vorhersage
 - Wohnort legt der **Admin** unter Verwaltung fest (Suche nach Ort/PLZ). Daten von Open-Meteo (kostenlos, ohne Konto), Aktualisierung alle 10–30 Min.
 
+## Version 5 (09.10.2026) – Prüfungen
+- Neue Termin-Art **📝 Prüfung** (Schulaufgabe, Kurzarbeit, Test/Ex, Referat, Abgabe) mit Fach (Vorschläge aus dem Stundenplan), Datum, optional Uhrzeit, **Stoff/Thema**
+- **Countdown** in der Karte des Kindes auf der Startseite für Prüfungen der nächsten **14 Tage** („noch 5 Tage“, ab 7 Tagen orange, ab 2 Tagen rot, „Morgen!“, „Heute!“)
+- **Lern-Erinnerung**: ab 3/5/7/10/14 Tagen vorher täglich „Für <Fach> lernen“ in den Aufgaben des Kindes; Kinder haken selbst ab
+- Im Kalender rötlich hervorgehoben; Übersicht unter **Schule & Sport → Prüfungen** (kommende + vergangene je Kind)
+- Anlegen über: Schule & Sport → Prüfungen, „+“ auf der Startseite, oder im Terminformular Art „Prüfung“ wählen
+
 ## Stand
 - [x] Version 1 gebaut (`index.html`), Testmodus funktioniert
 - [x] Supabase eingerichtet (Projekt drwuqnwepaaqlafsktfa, Frankfurt), Familienkonto angelegt, Registrierung gesperrt, Live-Sync getestet

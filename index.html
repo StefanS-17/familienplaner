@@ -239,6 +239,20 @@ textarea.input{min-height:90px;resize:vertical}
 .detail-row{display:flex;gap:10px;padding:6px 0;font-size:15px}
 .detail-row .k{width:110px;flex:none;color:var(--muted);font-size:14px}
 .detail-row .v{white-space:pre-wrap;overflow-wrap:anywhere}
+/* Prüfungen */
+.ev.exam{background:color-mix(in srgb,#ef4444 9%,var(--card));border-radius:10px;padding:8px;margin:4px 0;border-bottom:0}
+.mc .lbl.exam{font-weight:700;background:color-mix(in srgb,#ef4444 14%,transparent);border-radius:3px}
+.cd{display:inline-flex;align-items:center;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;flex:none}
+.cd-neutral{background:var(--card2);border:1px solid var(--line);color:var(--muted)}
+.cd-orange{background:color-mix(in srgb,#f59e0b 20%,var(--card));color:color-mix(in srgb,#d97706 75%,var(--text))}
+.cd-red{background:color-mix(in srgb,#ef4444 18%,var(--card));color:color-mix(in srgb,#dc2626 80%,var(--text))}
+.cd-past{background:var(--card2);color:var(--muted);font-weight:600}
+.exam-row{display:flex;gap:10px;align-items:flex-start;padding:7px 9px;border-radius:10px;background:color-mix(in srgb,#ef4444 7%,var(--card));border:1px solid color-mix(in srgb,#ef4444 22%,var(--line));margin-bottom:6px;cursor:pointer}
+.exam-row .lt{min-width:0;flex:1;overflow-wrap:anywhere}
+.seg{max-width:100%;overflow-x:auto;scrollbar-width:none}
+.seg::-webkit-scrollbar{display:none}
+.seg button{white-space:nowrap}
+@media (max-width:480px){.seg button{padding:7px 10px;font-size:13px}}
 /* Wetter */
 .wx{display:block;width:100%;text-align:left;cursor:pointer;font:inherit;color:inherit;background:linear-gradient(135deg,color-mix(in srgb,#38bdf8 24%,var(--card)),var(--card) 75%)}
 .wx.night{background:linear-gradient(135deg,color-mix(in srgb,#6366f1 26%,var(--card)),var(--card) 75%)}
@@ -481,8 +495,8 @@ function saveUi(){ try { localStorage.setItem(LS_UI, JSON.stringify({ hidden:mem
 /* ---------- Ferien, Termine, Aufgaben ---------- */
 const holidays = () => all('holiday').filter(ok).sort((a,b) => a.from.localeCompare(b.from));
 const holidayOn = ds => holidays().find(h => ds >= h.from && ds <= h.to);
-const CATS = { termin:'Termin', training:'Training', spiel:'Spiel/Turnier', ausflug:'Ausflug', schule:'Schule', google:'Google Kalender' };
-const CAT_ICON = { termin:'📌', training:'🏃', spiel:'🏆', ausflug:'🚌', schule:'🎒', google:'📆' };
+const CATS = { termin:'Termin', training:'Training', spiel:'Spiel/Turnier', ausflug:'Ausflug', schule:'Schule', pruefung:'Prüfung', google:'Google Kalender' };
+const CAT_ICON = { termin:'📌', training:'🏃', spiel:'🏆', ausflug:'🚌', schule:'🎒', pruefung:'📝', google:'📆' };
 
 function occurrences(from, to, opts={}){
   const out = [];
@@ -514,10 +528,11 @@ function personColors(ids){
 }
 function evRow(o, showDate){
   const e = o.e;
-  return `<div class="ev ${e.status==='pending'?'pending':''}" onclick="A.showEvent('${e.id}','${o.date}')">
+  const exam = e.category === 'pruefung';
+  return `<div class="ev ${e.status==='pending'?'pending':''} ${exam?'exam':''}" onclick="A.showEvent('${e.id}','${o.date}')">
     <span class="bar" style="background:${personColors(e.persons)}"></span>
     <div class="eb"><div class="et">${CAT_ICON[e.category]||''} ${esc(e.title)}</div>
-    <div class="em"><span>${showDate ? fmtShort(o.date) + ' · ' : ''}${timeLabel(e)}</span>${e.location ? `<span>📍 ${esc(e.location)}</span>` : ''}${e.repeat==='weekly' ? '<span>🔁 wöchentlich</span>' : ''}${avatars(e.persons && e.persons.length ? e.persons : [])}${pendTag(e)}</div></div></div>`;
+    <div class="em"><span>${showDate ? fmtShort(o.date) + ' · ' : ''}${timeLabel(e)}</span>${e.location ? `<span>📍 ${esc(e.location)}</span>` : ''}${e.repeat==='weekly' ? '<span>🔁 wöchentlich</span>' : ''}${exam && e.topic ? `<span>📚 ${esc(e.topic.split('\n')[0])}</span>` : ''}${avatars(e.persons && e.persons.length ? e.persons : [])}${exam && daysUntil(o.date) >= 0 ? countdown(o.date) : ''}${pendTag(e)}</div></div></div>`;
 }
 
 const periodKey = (t, ds) => t.repeat === 'daily' ? ds : t.repeat === 'weekly' ? isoWeekKey(parse(ds)) : null;
@@ -527,10 +542,13 @@ const REPEAT = { none:'einmalig', daily:'täglich', weekly:'wöchentlich' };
 function taskRow(t, ds = todayStr()){
   const done = isDone(t, ds), p = mem(t.person);
   const over = !done && t.due && t.due < todayStr() && (!t.repeat || t.repeat === 'none');
+  const tick = t.learn ? `A.toggleLearn('${t.examId}','${t.person}','${ds}')` : `A.toggleTask('${t.id}','${ds}')`;
+  const open = t.learn ? `A.showEvent('${t.examId}','${t.due}')` : `A.showTask('${t.id}')`;
+  const n = t.learn ? daysUntil(t.due) : 0;
   return `<div class="li ${done?'done':''} ${t.status==='pending'?'pending':''}">
-    <button class="cb ${done?'on':''}" style="--c:${p?.color||'var(--ok)'}" ${canTick(t)?'':'disabled'} onclick="A.toggleTask('${t.id}','${ds}')" aria-label="Erledigt">${done?ic('tick'):''}</button>
-    <div class="lt" onclick="A.showTask('${t.id}')"><div class="tt">${esc(t.title)}</div>
-    <div class="sub">${p ? avatar(p,'xs') + esc(p.name) : '<span>Alle</span>'}${t.repeat && t.repeat!=='none' ? `<span class="tag">🔁 ${REPEAT[t.repeat]}</span>` : ''}${t.due && (!t.repeat||t.repeat==='none') ? `<span class="tag ${over?'red':''}">${over?'überfällig · ':''}bis ${fmtShort(t.due)}</span>` : ''}${pendTag(t)}</div></div></div>`;
+    <button class="cb ${done?'on':''}" style="--c:${p?.color||'var(--ok)'}" ${canTick(t)?'':'disabled'} onclick="${tick}" aria-label="Erledigt">${done?ic('tick'):''}</button>
+    <div class="lt" onclick="${open}"><div class="tt">${esc(t.title)}</div>
+    <div class="sub">${p ? avatar(p,'xs') + esc(p.name) : '<span>Alle</span>'}${t.learn ? `<span class="tag">📝 ${n <= 1 ? 'Prüfung morgen' : `Prüfung in ${n} Tagen`}</span>` : t.repeat && t.repeat!=='none' ? `<span class="tag">🔁 ${REPEAT[t.repeat]}</span>` : ''}${t.due && (!t.repeat||t.repeat==='none') ? `<span class="tag ${over?'red':''}">${over?'überfällig · ':''}bis ${fmtShort(t.due)}</span>` : ''}${pendTag(t)}</div></div></div>`;
 }
 function tasksFor(personId, ds){
   return all('task').filter(t => {
@@ -539,6 +557,27 @@ function tasksFor(personId, ds){
     if (t.done) return t.doneAt && ymd(new Date(t.doneAt)) === ds;
     return !t.due || t.due <= ds || ds === todayStr();
   });
+}
+/* Prüfungen: Countdown und Lern-Erinnerungen */
+const EXAM_TYPES = [['Schulaufgabe','Schulaufgabe'],['Kurzarbeit','Kurzarbeit'],['Test','Test / Ex'],['Referat','Referat'],['Abgabe','Abgabe / Projekt']];
+const daysUntil = ds => Math.round((parse(ds) - parse(todayStr())) / 864e5);
+function countdown(ds){
+  const n = daysUntil(ds);
+  const txt = n < 0 ? 'vorbei' : n === 0 ? 'Heute!' : n === 1 ? 'Morgen!' : `noch ${n} Tage`;
+  return `<span class="cd ${n < 0 ? 'cd-past' : n <= 2 ? 'cd-red' : n <= 7 ? 'cd-orange' : 'cd-neutral'}">${txt}</span>`;
+}
+const exams = () => all('event').filter(e => e.category === 'pruefung');
+const upcomingExams = (personId, maxDays = Infinity) => exams()
+  .filter(e => (!personId || (e.persons || []).includes(personId)) && daysUntil(e.date) >= 0 && daysUntil(e.date) <= maxDays)
+  .sort((a,b) => a.date.localeCompare(b.date) || (a.start || '').localeCompare(b.start || ''));
+function learnTasks(personId, ds){
+  return exams().filter(e => ok(e) && +e.learnDays > 0 && (e.persons || []).includes(personId) && ds < e.date && ds >= ymd(addDays(parse(e.date), -e.learnDays)))
+    .map(e => ({ learn:true, examId:e.id, title:`Für ${e.subject || e.title} lernen`, person:personId, repeat:'daily', doneKeys:(e.learnDone || {})[personId] || [], due:e.date, status:'ok' }));
+}
+function examRow(e){
+  const d = parse(e.date);
+  return `<div class="exam-row ${e.status==='pending'?'pending':''}" onclick="A.showEvent('${e.id}','${e.date}')">${countdown(e.date)}<div class="lt"><div><b>📝 ${esc(e.title)}</b> ${pendTag(e)}</div>
+    <div class="small muted">${WD[wdIdx(d)]} ${d.getDate()}.${d.getMonth()+1}.${e.start ? ' · ' + e.start + ' Uhr' : ''}${e.topic ? ' · ' + esc(e.topic.split('\n')[0]) : ''}</div></div></div>`;
 }
 function timetableToday(kidId, ds){
   const d = parse(ds), w = wdIdx(d);
@@ -819,10 +858,12 @@ function vHeute(){
   const famEv = occ.filter(o => !o.e.persons || !o.e.persons.length);
   h += `<div class="grid two">`;
   for (const m of members().filter(m => S.filter.has(m.id))){
-    const ev = occ.filter(o => o.e.persons && o.e.persons.includes(m.id));
-    const ts = tasksFor(m.id, ds);
+    const ev = occ.filter(o => o.e.persons && o.e.persons.includes(m.id) && o.e.category !== 'pruefung');
+    const ts = [...learnTasks(m.id, ds), ...tasksFor(m.id, ds)];
+    const ex = upcomingExams(m.id, 14);
     const tt = m.role === 'child' ? timetableToday(m.id, ds) : [];
     h += `<div class="card pcard" style="--c:${m.color}"><div class="ph">${avatar(m)}${esc(m.name)}${m.id===S.me.id?' <span class="muted small" style="font-weight:400">(du)</span>':''}</div><div class="pb">
+      ${ex.length ? `<div class="sec-t">📝 Prüfungen</div>${ex.map(examRow).join('')}` : ''}
       <div class="sec-t">Termine</div>${ev.length ? ev.map(o => evRow(o)).join('') : '<div class="empty">Keine Termine</div>'}
       ${tt.length ? `<div class="sec-t">Stundenplan</div>${tt.map(l => `<div class="row small" style="padding:2px 0"><span class="muted" style="width:22px">${l.r}.</span><b>${esc(l.fach)}</b>${l.raum?`<span class="muted">${esc(l.raum)}</span>`:''}${l.time?`<span class="spacer"></span><span class="muted">${esc(l.time)}</span>`:''}</div>`).join('')}` : ''}
       <div class="sec-t">Aufgaben</div>${ts.length ? ts.map(t => taskRow(t, ds)).join('') : '<div class="empty">Nichts zu tun 🎉</div>'}
@@ -863,7 +904,7 @@ function vKalender(){
       const cls = [d.getMonth()!==base.getMonth()?'out':'', ds===todayStr()?'today':'', ds===c.sel?'sel':'', holidayOn(ds)?'holi':''].join(' ');
       h += `<button class="mc ${cls}" onclick="A.calSel('${ds}')"><span class="n">${d.getDate()}</span>
         <span class="dots">${list.slice(0,6).map(o => `<span class="dot" style="background:${mem(o.e.persons?.[0])?.color||'var(--muted)'}"></span>`).join('')}</span>
-        ${list.slice(0,3).map(o => `<span class="lbl" style="border-color:${mem(o.e.persons?.[0])?.color||'var(--muted)'}">${esc(o.e.title)}</span>`).join('')}${list.length>3?`<span class="small muted">+${list.length-3}</span>`:''}</button>`;
+        ${list.slice(0,3).map(o => `<span class="lbl ${o.e.category==='pruefung'?'exam':''}" style="border-color:${mem(o.e.persons?.[0])?.color||'var(--muted)'}">${esc(o.e.title)}</span>`).join('')}${list.length>3?`<span class="small muted">+${list.length-3}</span>`:''}</button>`;
       if (i === 34 && addDays(start,35).getMonth() !== base.getMonth()) break;
     }
     h += `</div>`;
@@ -999,7 +1040,16 @@ function vEssen(){
 /* ----- Schule & Sport ----- */
 function vSchule(){
   const tab = S.sub.schule || 'stundenplan';
-  let h = `<div class="toolbar"><div class="seg"><button class="${tab==='stundenplan'?'on':''}" onclick="A.sub('schule','stundenplan')">Stundenplan</button><button class="${tab==='sport'?'on':''}" onclick="A.sub('schule','sport')">Training & Spiele</button><button class="${tab==='ferien'?'on':''}" onclick="A.sub('schule','ferien')">Ferien</button></div></div>`;
+  let h = `<div class="toolbar"><div class="seg"><button class="${tab==='stundenplan'?'on':''}" onclick="A.sub('schule','stundenplan')">Stundenplan</button><button class="${tab==='pruefungen'?'on':''}" onclick="A.sub('schule','pruefungen')">📝 Prüfungen</button><button class="${tab==='sport'?'on':''}" onclick="A.sub('schule','sport')">Sport</button><button class="${tab==='ferien'?'on':''}" onclick="A.sub('schule','ferien')">Ferien</button></div></div>`;
+  if (tab === 'pruefungen'){
+    h += `<div class="toolbar"><button class="btn" onclick="A.editExam()">${ic('plus','sm')} Prüfung</button><span class="muted small">Prüfungen der nächsten 14 Tage stehen mit Countdown auf der Startseite.</span></div><div class="grid two">`;
+    for (const k of kids()){
+      const up = upcomingExams(k.id), past = exams().filter(e => (e.persons || []).includes(k.id) && daysUntil(e.date) < 0).sort((a,b) => b.date.localeCompare(a.date));
+      h += `<div class="card pcard" style="--c:${k.color};margin:0"><div class="ph">${avatar(k)}${esc(k.name)}</div><div class="pb">${up.length ? up.map(examRow).join('') : '<div class="empty">Keine anstehenden Prüfungen.</div>'}
+        ${past.length ? `<details style="margin-top:8px"><summary class="small muted" style="cursor:pointer">Vergangene Prüfungen (${past.length})</summary><div style="margin-top:6px">${past.slice(0,30).map(examRow).join('')}</div></details>` : ''}</div></div>`;
+    }
+    return h + `</div>`;
+  }
   if (tab === 'stundenplan'){
     const ks = kids(); if (!ks.length) return h + '<div class="empty">Keine Kinder angelegt.</div>';
     if (!S.ttKid || !ks.find(k => k.id === S.ttKid)) S.ttKid = S.me.role === 'child' ? S.me.id : ks[0].id;
@@ -1117,10 +1167,11 @@ function fieldHtml(f, v){
   if (f.type === 'checkbox') return `<div class="field"><label class="check"><input type="checkbox" id="${id}" ${v?'checked':''}> ${esc(f.label)}</label></div>`;
   let input;
   if (f.type === 'textarea') input = `<textarea class="input" id="${id}" placeholder="${esc(f.ph||'')}">${esc(v||'')}</textarea>`;
-  else if (f.type === 'select') input = `<select class="input" id="${id}">${f.options.map(([ov,ol]) => `<option value="${esc(ov)}" ${ov===(v??'')?'selected':''}>${esc(ol)}</option>`).join('')}</select>`;
-  else if (f.type === 'persons') input = `<div class="chips" id="${id}" style="flex-wrap:wrap">${members().map(m => `<button type="button" class="chip ${(v||[]).includes(m.id)?'on':'off'}" data-id="${m.id}" style="--c:${m.color}" onclick="this.classList.toggle('on');this.classList.toggle('off')">${avatar(m)}${esc(m.name)}</button>`).join('')}</div>`;
+  else if (f.type === 'select') input = `<select class="input" id="${id}" ${f.attrs||''}>${f.options.map(([ov,ol]) => `<option value="${esc(ov)}" ${ov===(v??'')?'selected':''}>${esc(ol)}</option>`).join('')}</select>`;
+  else if (f.type === 'persons') input = `<div class="chips" id="${id}" style="flex-wrap:wrap">${(f.members ? f.members() : members()).map(m => `<button type="button" class="chip ${(v||[]).includes(m.id)?'on':'off'}" data-id="${m.id}" style="--c:${m.color}" onclick="this.classList.toggle('on');this.classList.toggle('off')">${avatar(m)}${esc(m.name)}</button>`).join('')}</div>`;
   else if (f.type === 'color') input = `<div class="colors" id="${id}" data-v="${esc(v||COLORS[0])}">${COLORS.map(c => `<button type="button" class="${c===v?'on':''}" style="--c:${c}" onclick="this.parentNode.dataset.v='${c}';[...this.parentNode.children].forEach(b=>b.classList.remove('on'));this.classList.add('on')" aria-label="Farbe"></button>`).join('')}</div>`;
-  else input = `<input class="input" id="${id}" type="${f.type||'text'}" value="${esc(v||'')}" placeholder="${esc(f.ph||'')}" ${f.attrs||''}>`;
+  else input = `<input class="input" id="${id}" type="${f.type||'text'}" value="${esc(v||'')}" placeholder="${esc(f.ph||'')}" ${f.suggest ? `list="${id}-dl" autocomplete="off"` : ''} ${f.attrs||''}>`
+    + (f.suggest ? `<datalist id="${id}-dl">${f.suggest.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>` : '');
   return `<div class="field"><label for="${id}">${esc(f.label)}${f.required?' *':''}</label>${input}${f.hint?`<div class="muted small" style="margin-top:4px">${f.hint}</div>`:''}</div>`;
 }
 function openForm({ title, fields, values = {}, onSave, extra = '' }){
@@ -1148,7 +1199,8 @@ function confirmBox(msg, yes, label = 'Löschen'){
 
 const EVENT_FIELDS = () => [
   { k:'title', label:'Titel', required:true, ph:'z. B. Zahnarzt, Fußballtraining' },
-  { k:'category', label:'Art', type:'select', options:Object.entries(CATS) },
+  { k:'category', label:'Art', type:'select', options:Object.entries(CATS).filter(([k]) => k !== 'google'),
+    attrs:`onchange="if(this.value==='pruefung')A.editExam(null,document.getElementById('f-date').value)"`, hint:'Für Schulaufgaben & Co. „Prüfung“ wählen – mit Countdown auf der Startseite.' },
   { k:'persons', label:'Wer ist dabei?', type:'persons' },
   [{ k:'date', label:'Datum', type:'date', required:true }, { k:'repeat', label:'Wiederholung', type:'select', options:[['none','Einmalig'],['weekly','Jede Woche']] }],
   { k:'allDay', label:'Ganztägig', type:'checkbox' },
@@ -1208,10 +1260,11 @@ const A = {
   calNav(n){ const d = parse(S.cal.date); if (S.cal.mode === 'woche') S.cal.date = ymd(addDays(d, 7*n)); else { const x = new Date(d.getFullYear(), d.getMonth()+n, 1); S.cal.date = ymd(x); S.cal.sel = ymd(x); } render(); },
   calToday(){ S.cal.date = S.cal.sel = todayStr(); render(); },
   calSel(ds){ S.cal.sel = ds; render(); },
-  quickAdd(){ openModal(`<h2>Neu anlegen</h2><div class="sheet-list"><button onclick="A.newEvent()">${ic('cal')} Termin</button><button onclick="A.newTask()">${ic('check')} Aufgabe</button><button onclick="A.close();A.go('essen')">${ic('cart')} Einkauf</button><button onclick="A.newNote()">${ic('note')} Pinnwand-Eintrag</button></div>`); },
+  quickAdd(){ openModal(`<h2>Neu anlegen</h2><div class="sheet-list"><button onclick="A.newEvent()">${ic('cal')} Termin</button><button onclick="A.newTask()">${ic('check')} Aufgabe</button><button onclick="A.close();A.go('essen')">${ic('cart')} Einkauf</button><button onclick="A.newNote()">${ic('note')} Pinnwand-Eintrag</button><button onclick="A.editExam()"><span style="font-size:20px;width:22px;text-align:center">📝</span> Prüfung</button></div>`); },
   newEvent(date, category){ A.editEvent(null, date, category); },
   editEvent(id, date, category){
     const e = id ? find(id) : null;
+    if (e?.category === 'pruefung' || category === 'pruefung') return A.editExam(id, date);
     const cat = category || 'termin';
     const values = e || { date: date || (S.view==='kalender' ? S.cal.sel : todayStr()), category: cat, persons: S.me.role==='child' ? [S.me.id] : [], repeat: cat==='training' ? 'weekly' : 'none', skipHolidays: cat==='training', start:'', end:'' };
     openForm({ title: e ? 'Termin bearbeiten' : (CATS[cat] === 'Termin' ? 'Neuer Termin' : CATS[cat] + ' anlegen'), fields: EVENT_FIELDS(), values,
@@ -1235,9 +1288,38 @@ const A = {
     }
     openModal(`<div class="row" style="margin-bottom:6px"><span class="tag">${CAT_ICON[e.category]||''} ${CATS[e.category]||'Termin'}</span>${pendTag(e)}</div><h2>${esc(e.title)}</h2>
       ${row('Wann', fmtLong(ds) + ' · ' + timeLabel(e))}${row('Wiederholung', e.repeat==='weekly' ? `jeden ${WDL[wdIdx(parse(e.date))]}${e.until?' bis '+fmtDate(e.until):''}${e.skipHolidays?' · pausiert in den Ferien':''}` : '')}
+      ${e.category === 'pruefung' ? row('Prüfung', `${esc(e.examType || '')} · ${esc(e.subject || '')}`) + row('Countdown', countdown(e.date)) + row('Stoff', esc(e.topic)) + row('Lernen', +e.learnDays ? `ab ${e.learnDays} Tage vorher täglich „Für ${esc(e.subject)} lernen“` : '') : ''}
       ${row('Wer', people.length ? people.map(p => avatar(p,'xs') + ' ' + esc(p.name)).join('&nbsp;&nbsp;') : 'Ganze Familie')}${row('Ort', esc(e.location))}${row('Mitbringen', esc(e.bring))}${row('Notiz', esc(e.note))}
       ${row('Eingetragen', esc(mem(e.createdBy)?.name || ''))}${isG ? row('Quelle', `📆 ${esc(e.source)} – ändern bitte direkt in Google Kalender`) : ''}
       <div class="actions">${actions}<button class="btn sec" onclick="A.close()">Schließen</button></div>`);
+  },
+  editExam(id, date, preset){
+    const e = id ? find(id) : null;
+    if (e && !isParent()) return A.showEvent(id, e.date);
+    const subjects = [...new Set(all('timetable').flatMap(tt => Object.values(tt.cells || {}).map(c => c.fach)).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'de'));
+    const def = S.me.role === 'child' ? [S.me.id] : (S.view === 'schule' && S.ttKid ? [S.ttKid] : kids().length === 1 ? [kids()[0].id] : []);
+    openForm({ title: e ? 'Prüfung bearbeiten' : 'Neue Prüfung', fields:[
+      { k:'persons', label:'Wer schreibt?', type:'persons', members:kids },
+      [{ k:'examType', label:'Art', type:'select', options:EXAM_TYPES }, { k:'subject', label:'Fach', required:true, ph:'z. B. Mathe', suggest:subjects }],
+      [{ k:'date', label:'Datum', type:'date', required:true }, { k:'start', label:'Uhrzeit (optional)', type:'time' }],
+      { k:'topic', label:'Stoff / Thema', type:'textarea', ph:'z. B. Bruchrechnen, Buch S. 40–52' },
+      { k:'learnDays', label:'Lern-Erinnerung', type:'select', options:[['0','Keine'],['3','ab 3 Tage vorher'],['5','ab 5 Tage vorher'],['7','ab 7 Tage vorher'],['10','ab 10 Tage vorher'],['14','ab 14 Tage vorher']],
+        hint:'In diesen Tagen steht beim Kind täglich „Für … lernen“ zum Abhaken.' }],
+      values: preset || (e ? { ...e, learnDays:String(e.learnDays ?? 0) } : { persons:def, examType:'Schulaufgabe', date: date || todayStr(), learnDays:'7' }),
+      onSave: v => {
+        if (!v.persons.length){ toast('Bitte auswählen, wer die Prüfung schreibt', true); return A.editExam(id, date, v); }
+        const data = { ...v, learnDays: +v.learnDays || 0, title:`${v.subject}-${v.examType}`, category:'pruefung', allDay:!v.start, end:'', repeat:'none' };
+        Store.save(e ? { ...e, ...data } : make('event', { ...data, learnDone:{} }));
+        toast(isParent() || e ? 'Prüfung gespeichert' : 'Als Vorschlag gespeichert – wartet auf Freigabe');
+      },
+      extra: e ? `<button type="button" class="btn danger" style="width:100%;margin-top:10px" onclick="A.close();A.del('${e.id}')">${ic('trash','sm')} Prüfung löschen</button>` : '' });
+  },
+  toggleLearn(examId, personId, ds){
+    const e = find(examId); if (!e || !(isParent() || personId === S.me.id)) return;
+    const ld = { ...(e.learnDone || {}) }, keys = new Set(ld[personId] || []);
+    keys.has(ds) ? keys.delete(ds) : keys.add(ds);
+    ld[personId] = [...keys];
+    Store.save({ ...e, learnDone:ld });
   },
   skipOne(id, ds){ const e = find(id); closeModal(); Store.save({ ...e, exceptions: [...(e.exceptions||[]), ds] }); toast(`Termin am ${fmtShort(ds)} abgesagt`); },
 
